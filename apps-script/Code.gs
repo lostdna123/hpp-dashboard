@@ -38,6 +38,7 @@ const CFG = {
   SH_KAS_AWAL: 'SALDO_AWAL_KAS',
   SH_MUTASI_KAS: 'MUTASI_KAS',
   SH_TARGET: 'TARGET_OUTLET',
+  SH_CASHFLOW: 'REKAP_CASHFLOW',
   SALDO_AWAL_KAS: 100000000,      // saldo awal default tiap outlet baru (bisa diubah per outlet di sheet)
   FOLDER_NOTA: 'Foto Nota HPP',
   TOLERANSI_HARGA: 0.20,          // flag kalau harga > harga acuan + 20%
@@ -695,6 +696,7 @@ function setup() {
   siapkanRekap_(ss);
   siapkanTren_(ss);
   siapkanProfit_(ss);
+  siapkanCashflow_(ss);
   siapkanKamus_(ss);
 
   // Hapus sheet kosong bawaan
@@ -907,6 +909,105 @@ function siapkanTarget_(ss) {
   lebarKolom_(t, [90, 150, 120, 120, 240]);
 }
 
+/**
+ * REKAP_CASHFLOW: laporan arus kas bulanan (rumus live), sama aturannya dengan tab Cashflow di dashboard.
+ * B1 = outlet (atau SEMUA). Kolom = bulan sejak tanggal mulai kas s/d bulan ini.
+ * Basis kas: gaji, biaya tetap & tagihan dicatat keluar di akhir bulan (bulan berjalan: baris "belum dibayar").
+ */
+function siapkanCashflow_(ss) {
+  const sh = ss.getSheetByName(CFG.SH_CASHFLOW) || ss.insertSheet(CFG.SH_CASHFLOW);
+  sh.clear();
+  sh.getRange(1, 1, sh.getMaxRows(), sh.getMaxColumns()).clearDataValidations();
+  sh.clearConditionalFormatRules();
+  if (sh.getMaxColumns() < 80) sh.insertColumnsAfter(sh.getMaxColumns(), 80 - sh.getMaxColumns());
+  const O = CFG.SH_OMZET, B = CFG.SH_BELANJA, P = CFG.SH_PEMBELIAN, K = CFG.SH_KARYAWAN, T = CFG.SH_TETAP, BL = CFG.SH_BULANAN,
+    M = CFG.SH_MUTASI_KAS, SA = CFG.SH_KAS_AWAL, S = CFG.SH_STORE;
+  const kk = '$B$30', saldo = '$B$31', mulai = '$B$32', bi = '$B$33', R = '$B$3:$BZ$3';
+  const cocok = rng => '((((' + kk + '="*")*(' + rng + '<>""))+(' + rng + '=' + kk + '))>0)';
+  const aktif = (sheet, cMulai, cSelesai) => '(((' + sheet + '!$' + cMulai + '$2:$' + cMulai + '="")+(' + sheet + '!$' + cMulai + '$2:$' + cMulai + '<=ak))>0)*(((' +
+    sheet + '!$' + cSelesai + '$2:$' + cSelesai + '="")+(' + sheet + '!$' + cSelesai + '$2:$' + cSelesai + '>=aw))>0)';
+  const gajiF = 'SUMPRODUCT(' + cocok(K + '!$A$2:$A') + '*' + aktif(K, 'G', 'H') + '*(' + K + '!$D$2:$D+' + K + '!$E$2:$E+' + K + '!$F$2:$F))';
+  const tetapF = 'SUMPRODUCT(' + cocok(T + '!$A$2:$A') + '*' + aktif(T, 'E', 'F') + '*' + T + '!$D$2:$D)';
+  const tagihanF = 'SUMIFS(' + BL + '!$E:$E, ' + BL + '!$B:$B, ' + kk + ', ' + BL + '!$A:$A, m)';
+  const sudahLewat = expr => 'IF(m>=' + bi + ', 0, LET(aw, DATEVALUE(m&"-01"), ak, EOMONTH(aw, 0), IF(ak<' + mulai + ', 0, ' + expr + ')))';
+  const sumifs = (sheet, colNilai) => 'SUMIFS(' + sheet + '!$' + colNilai + ':$' + colNilai + ', ' + sheet + '!$F:$F, ' + kk + ', ' + sheet + '!$D:$D, m, ' + sheet + '!$C:$C, ">="&' + mulai + ')';
+  const mutasi = arah => 'LET(tg, ' + M + '!$A$2:$A, jn, ' + M + '!$C$2:$C, jm, ' + M + '!$E$2:$E, ' +
+    'isM, ISNUMBER(SEARCH("masuk", jn)), isK, ISNUMBER(SEARCH("keluar", jn)), sg, isM*ABS(jm) - isK*ABS(jm) + (1-isM)*(1-isK)*jm, ' +
+    'ok, ' + cocok(M + '!$B$2:$B') + '*(IFERROR(TEXT(tg, "yyyy-mm"), "")=m)*(tg>=' + mulai + '), ' +
+    'SUMPRODUCT(ok*' + (arah > 0 ? '(sg>0)*sg' : '(sg<0)*(-sg)') + '))';
+  const peta = expr => '=MAP(' + R + ', LAMBDA(m, IF(m="", "", IFERROR(' + expr + ', 0))))';
+  const larik = expr => '=ARRAYFORMULA(IF(' + R + '="", "", ' + expr + '))';
+  const baris = (r) => 'B' + r + ':BZ' + r;
+
+  sh.getRange('A1').setValue('Outlet:').setFontWeight('bold');
+  sh.getRange('B1').setValue('SEMUA').setBackground('#FEF3C7').setFontWeight('bold');
+  sh.getRange('C1').setValue('← klik ▾ untuk pilih outlet (SEMUA = gabungan semua cabang)').setFontColor('#6B7280');
+  sh.getRange('A2').setValue('Basis kas: uang benar-benar masuk/keluar. Gaji, sewa/biaya tetap & tagihan dicatat keluar di akhir bulan, jadi bulan berjalan belum kepotong (lihat baris "Belum dibayar"). Saldo awal & mutasi diisi di SALDO_AWAL_KAS & MUTASI_KAS.')
+    .setFontStyle('italic').setFontColor('#6B7280');
+
+  // bantuan (baris disembunyikan)
+  sh.getRange('A30:B33').setValues([['kode (bantuan)', ''], ['saldo awal', ''], ['tanggal mulai', ''], ['bulan ini', '']]);
+  sh.getRange('B30').setFormula('=IF($B$1="SEMUA", "*", $B$1)');
+  sh.getRange('B31').setFormula('=IF($B$30="*", SUM(' + SA + '!C2:C), IFERROR(VLOOKUP($B$30, ' + SA + '!A2:C, 3, FALSE), 0))');
+  sh.getRange('B32').setFormula('=IF(COUNT(' + SA + '!B2:B)=0, "", IF($B$30="*", MIN(' + SA + '!B2:B), IFERROR(VLOOKUP($B$30, ' + SA + '!A2:B, 2, FALSE), "")))');
+  sh.getRange('B33').setFormula('=TEXT(TODAY(), "yyyy-mm")');
+  sh.getRange('A40').setValue('SEMUA');
+  sh.getRange('A41').setFormula('=FILTER(' + S + '!A2:A, ' + S + '!A2:A<>"")');
+  sh.getRange('B1').setDataValidation(SpreadsheetApp.newDataValidation().requireValueInRange(sh.getRange('A40:A100'), true).setAllowInvalid(false).build());
+
+  // header bulan
+  sh.getRange('A3').setValue('Pos (Rupiah)');
+  sh.getRange('B3').setFormula('=IF($B$32="", "Isi SALDO_AWAL_KAS dulu", ARRAYFORMULA(TEXT(EDATE(DATE(YEAR($B$32), MONTH($B$32), 1), ' +
+    'SEQUENCE(1, MIN(78, (YEAR(TODAY())-YEAR($B$32))*12 + MONTH(TODAY()) - MONTH($B$32) + 1), 0)), "yyyy-mm")))');
+
+  const label = [
+    [4, 'Saldo awal'], [5, 'KAS MASUK'], [6, 'Omzet penjualan'], [7, 'Tambahan modal & mutasi masuk'], [8, 'Total kas masuk'],
+    [9, 'KAS KELUAR'], [10, 'Belanja bahan baku'], [11, 'Pembelian non-bahan'], [12, 'Gaji karyawan'], [13, 'Sewa & biaya tetap'],
+    [14, 'Tagihan (listrik, air, dll)'], [15, 'Setoran ke HO & mutasi keluar'], [16, 'Total kas keluar'], [17, 'Arus kas bersih'],
+    [18, 'Saldo akhir'], [20, 'Belum dibayar bulan ini (gaji, sewa, tagihan)'], [21, 'Saldo akhir setelah dibayar'],
+    [23, 'RINGKASAN SEJAK MULAI'], [24, 'Total kas masuk'], [25, 'Total kas keluar'], [26, 'Saldo kas sekarang'], [27, 'Saldo setelah gaji/sewa bulan ini dibayar']
+  ];
+  label.forEach(x => sh.getRange(x[0], 1).setValue(x[1]));
+
+  sh.getRange('B6').setFormula(peta(sumifs(O, 'I')));
+  sh.getRange('B7').setFormula(peta(mutasi(1)));
+  sh.getRange('B8').setFormula(larik(baris(6) + '+' + baris(7)));
+  sh.getRange('B10').setFormula(peta(sumifs(B, 'N')));
+  sh.getRange('B11').setFormula(peta(sumifs(P, 'N')));
+  sh.getRange('B12').setFormula(peta(sudahLewat(gajiF)));
+  sh.getRange('B13').setFormula(peta(sudahLewat(tetapF)));
+  sh.getRange('B14').setFormula(peta(sudahLewat(tagihanF)));
+  sh.getRange('B15').setFormula(peta(mutasi(-1)));
+  sh.getRange('B16').setFormula(larik(baris(10) + '+' + baris(11) + '+' + baris(12) + '+' + baris(13) + '+' + baris(14) + '+' + baris(15)));
+  sh.getRange('B17').setFormula(larik(baris(8) + '-' + baris(16)));
+  sh.getRange('B18').setFormula('=ARRAYFORMULA(IF(' + R + '="", "", SCAN(' + saldo + ', ' + baris(17) + ', LAMBDA(a, x, a + N(x)))))');
+  sh.getRange('B4').setFormula(larik(baris(18) + '-' + baris(17)));
+  sh.getRange('B20').setFormula(peta('IF(m<>' + bi + ', 0, LET(aw, DATEVALUE(m&"-01"), ak, EOMONTH(aw, 0), ' + gajiF + ' + ' + tetapF + ' + ' + tagihanF + '))'));
+  sh.getRange('B21').setFormula(larik(baris(18) + '-' + baris(20)));
+  sh.getRange('B24').setFormula('=SUM(B8:BZ8)');
+  sh.getRange('B25').setFormula('=SUM(B16:BZ16)');
+  sh.getRange('B26').setFormula('=' + saldo + '+SUM(B17:BZ17)');
+  sh.getRange('B27').setFormula('=B26-SUM(B20:BZ20)');
+
+  // format
+  const TEAL = '#0F766E';
+  sh.getRange('A3:BZ3').setFontWeight('bold').setBackground(TEAL).setFontColor('#FFFFFF').setHorizontalAlignment('center');
+  sh.getRange('A3').setHorizontalAlignment('left');
+  sh.getRange('B4:BZ27').setNumberFormat('#,##0;[Red]-#,##0');
+  [4, 8, 16, 17, 18, 24, 25, 26, 27].forEach(r => sh.getRange(r, 1, 1, 78).setFontWeight('bold'));
+  [8, 16].forEach(r => sh.getRange(r, 1, 1, 78).setBackground('#F3F4F6'));
+  sh.getRange(17, 1, 1, 78).setBackground('#FFF7ED');
+  sh.getRange(18, 1, 1, 78).setBackground('#ECFDF5');
+  [5, 9, 23].forEach(r => sh.getRange(r, 1).setFontWeight('bold').setFontColor('#6B7280').setFontSize(9));
+  [20, 21].forEach(r => sh.getRange(r, 1, 1, 78).setFontColor('#6B7280').setFontStyle('italic'));
+  sh.setFrozenRows(3);
+  sh.setFrozenColumns(1);
+  sh.setColumnWidth(1, 300);
+  sh.setColumnWidths(2, 77, 115);
+  sh.hideRows(30, 71);
+  sh.setTabColor(TEAL);
+}
+
 /** Awal bulan dari data paling awal (belanja/omzet); kalau belum ada data, awal bulan ini. */
 function tanggalMulaiData_(ss) {
   let min = null;
@@ -1052,6 +1153,7 @@ function siapkanKamus_(ss) {
     ['INPUT_PEMBELIAN', '-', 'Pembelian di luar bahan baku (peralatan, kebersihan, ATK, perbaikan kecil, transport, dll) dari tab Pembelian di app HP. 1 baris = 1 barang. TIDAK masuk HPP / food cost; masuk laba operasional sebagai "Pembelian lain".'],
     ['INPUT_PEMBELIAN', 'Nama Barang', 'Diketik bebas oleh store (app memberi saran dari nama yang pernah dipakai). Group by pakai Kategori.'],
     ['INPUT_PEMBELIAN', 'Dibayar Dari', 'Kas outlet (tunai) = mengurangi kas outlet · Uang pribadi (reimburse) = utang ke karyawan · Transfer / kartu HO = dibayar pusat. Dasar perhitungan kas bersih.'],
+    ['REKAP_CASHFLOW', '-', 'Laporan arus kas bulanan (rumus otomatis). B1 pilih outlet atau SEMUA. Saldo awal → kas masuk (omzet, modal) → kas keluar (bahan, pembelian, gaji, sewa, tagihan, setoran) → arus bersih → saldo akhir. Gaji, sewa & tagihan dicatat keluar di akhir bulan.'],
     ['TARGET_OUTLET', '-', 'Target per outlet: omzet per bulan, batas food cost, target margin operasional. Kolom kosong = tidak ada target.'],
     ['SALDO_AWAL_KAS', '-', 'Saldo kas awal tiap outlet (default Rp100.000.000) dan tanggal kas mulai dihitung.'],
     ['MUTASI_KAS', '-', 'Mutasi kas manual: setoran/tarik ke HO (keluar), tambahan modal (masuk), koreksi selisih (+/−). Kas outlet = saldo awal + omzet − belanja bahan − pembelian lain − gaji − biaya tetap − tagihan bulanan ± mutasi. Gaji, biaya tetap & tagihan dianggap dibayar akhir bulan.'],
