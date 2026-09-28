@@ -13,6 +13,10 @@
     if (a >= 1e3) return 'Rp' + (n / 1e3).toLocaleString('id-ID', { maximumFractionDigits: 0 }) + ' rb';
     return rp(n);
   };
+  // kolom tabel: satuan seragam "jt" supaya mudah dibandingkan; angka lengkap di tooltip (title)
+  const rpJ = n => { const a = Math.abs(n || 0); return a >= 1e6 ? (n < 0 ? '-' : '') + 'Rp' + (a / 1e6).toLocaleString('id-ID', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + ' jt' : rp(n); };
+  const tdJ = (v, cls) => '<td class="n' + (cls ? ' ' + cls : '') + '" title="' + rp(v) + '">' + rpJ(v) + '</td>';
+  const alpha = (hex, a) => { const h = String(hex).replace('#', ''); if (h.length !== 6) return hex; return 'rgba(' + [0, 2, 4].map(i => parseInt(h.slice(i, i + 2), 16)).join(',') + ',' + a + ')'; };
   const pct = (x, d = 1) => (x == null || !isFinite(x)) ? '–' : (x * 100).toLocaleString('id-ID', { minimumFractionDigits: d, maximumFractionDigits: d }) + '%';
   const num = (x, d = 1) => (x || 0).toLocaleString('id-ID', { maximumFractionDigits: d });
   const sum = a => a.reduce((s, x) => s + x, 0);
@@ -82,8 +86,10 @@
       st.data = buatDemo(today());
     } else if (st.cfg.url && st.cfg.key) {
       s.className = 'status'; s.textContent = 'Mengambil data…';
+      $('main').classList.add('loading'); // bingkai lama tetap tampil (redup) selama memuat
       try { st.data = normalisasi(await api({ api: 'data' })); }
       catch (e) { s.className = 'status err'; s.textContent = 'Gagal terhubung'; toast(e.message); bukaSetting(e.message); return; }
+      finally { $('main').classList.remove('loading'); }
     } else { bukaSetting(); return; }
     setStatus();
     isiFilter();
@@ -175,6 +181,7 @@
   }
   const inStore = (sc, s) => !sc.storeSet || sc.storeSet.has(s);
   /** 6 bulan terakhir s/d "sampai" (atau periode filter kalau lebih panjang), maks 12 */
+  const rata7 = arr => arr.map((_, i) => { const w = arr.slice(Math.max(0, i - 6), i + 1).filter(x => x != null); return i >= 6 && w.length ? sum(w) / w.length : null; });
   const bulanGrafik = sc => { const b = sc.bulan.length >= 6 ? sc.bulan : monthsBetween(shiftMonth(sc.sampai, -5), sc.sampai); return b.slice(-12); };
 
   /* ================= hitungan ================= */
@@ -233,32 +240,97 @@
     if (!st.data) return;
     const sc = st.scope = hitungScope();
     st.anomali = Anomali.deteksi(st.data, { bulanDari: sc.dari, bulanSampai: sc.sampai, storeSet: sc.storeSet, hariIni: today() });
-    $('#cntAnomali').textContent = st.anomali.length;
+    $('#cntAnomali').textContent = st.anomali.filter(a => a.level === 'tinggi').length || '';
+    renderScope();
     renderKpi();
     renderAiMeta();
     renderTab();
+  }
+
+  /** Sparkline SVG: seluruh tren warna redup, periode terpilih warna aksen, titik terakhir bercincin. */
+  function sparkSvg(vals, mulai, o) {
+    o = o || {};
+    const v = vals.map(x => (x == null || !isFinite(x)) ? null : x), ada = v.filter(x => x != null);
+    if (ada.length < 2) return '';
+    const W = 100, H = o.h || 28, pd = 4, min = Math.min(...ada), max = Math.max(...ada);
+    const X = i => i * W / (v.length - 1), Y = x => max === min ? H / 2 : pd + (H - 2 * pd) * (1 - (x - min) / (max - min));
+    const jalur = (a, b) => { let d = '', pen = false; for (let i = a; i <= b; i++) { if (v[i] == null) { pen = false; continue; } d += (pen ? 'L' : 'M') + X(i).toFixed(2) + ' ' + Y(v[i]).toFixed(2); pen = true; } return d; };
+    let akhir = v.length - 1; while (akhir > 0 && v[akhir] == null) akhir--;
+    const warna = o.warna || 'var(--accent)', ns = ' vector-effect="non-scaling-stroke" fill="none" stroke-linecap="round" stroke-linejoin="round"';
+    const titik = 'M' + X(akhir).toFixed(2) + ' ' + Y(v[akhir]).toFixed(2) + 'h0';
+    return '<svg class="' + (o.cls || 'spark') + '" viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="none" role="img" aria-label="' + esc(o.label || 'tren') + '">' +
+      '<path d="' + jalur(0, v.length - 1) + '" stroke="var(--axis)" stroke-width="1.5"' + ns + '/>' +
+      '<path d="' + jalur(Math.max(0, mulai), v.length - 1) + '" stroke="' + warna + '" stroke-width="2"' + ns + '/>' +
+      '<path d="' + titik + '" stroke="var(--surface)" stroke-width="10"' + ns + '/><path d="' + titik + '" stroke="' + warna + '" stroke-width="6"' + ns + '/></svg>';
   }
 
   function renderKpi() {
     const sc = st.scope, batas = st.data.batasFoodCost || 0.35;
     const pl = plScope(sc, sc.dari, sc.sampai), plP = plScope(sc, sc.prevDari, sc.prevSampai);
     const a = agScope(sc, sc.dari, sc.sampai), aP = agScope(sc, sc.prevDari, sc.prevSampai);
-    const tinggi = st.anomali.filter(x => x.level === 'tinggi').length, sedang = st.anomali.filter(x => x.level === 'sedang').length;
-    const d = (html) => '<div class="d">' + html + ' vs periode sebelumnya</div>';
-    const kpi = (label, nilai, sub, extra) => '<div class="kpi' + (extra && extra.tab ? ' klik" data-goto="' + extra.tab : '') + '"' + (extra && extra.title ? ' title="' + esc(extra.title) + '"' : '') + '>' +
-      '<div class="l">' + label + '</div><div class="v' + (extra && extra.cls ? ' ' + extra.cls : '') + '">' + nilai + '</div>' + sub + '</div>';
+    const lv = l => st.anomali.filter(x => x.level === l).length, tinggi = lv('tinggi'), sedang = lv('sedang'), rendah = lv('rendah');
+    // tren bulanan untuk sparkline
+    const bl = bulanGrafik(sc), mulai = Math.max(0, bl.indexOf(sc.dari)), aB = bl.map(b => agScope(sc, b, b)), pB = bl.map(b => plScope(sc, b, b));
+    const lblTren = (nama, arr, f) => nama + ' per bulan: ' + bl.map((b, i) => labelBulan(b) + ' ' + (arr[i] == null ? '–' : f(arr[i]))).join(', ');
+    const spark = (nama, arr, f) => '<div class="spark-w">' + sparkSvg(arr, mulai, { label: lblTren(nama, arr, f) }) + '</div>';
+    const d = html => '<div class="d">' + html + ' vs periode sebelumnya</div>';
+    const kpi = (label, nilai, sub, extra) => '<button type="button" class="kpi' + (extra && extra.tab ? ' klik" data-goto="' + extra.tab : '') + '"' + (extra && extra.title ? ' title="' + esc(extra.title) + '"' : '') + '>' +
+      '<div class="l">' + label + '</div><div class="v' + (extra && extra.cls ? ' ' + extra.cls : '') + '">' + nilai + '</div>' + sub + (extra && extra.bawah || '') + '</button>';
+    const total = tinggi + sedang + rendah;
+    const meter = total ? '<div class="meter-wrap"><div class="meter" role="img" aria-label="' + tinggi + ' tinggi, ' + sedang + ' sedang, ' + rendah + ' rendah">' +
+      [[tinggi, '--crit-mark'], [sedang, '--serious'], [rendah, '--warn-mark']].filter(x => x[0]).map(x => '<i style="flex:' + x[0] + ';background:var(' + x[1] + ')"></i>').join('') + '</div></div>' : '';
     $('#kpis').innerHTML = [
-      kpi('Omzet', rpS(a.omz), d(chgHtml(chg(a.omz, aP.omz), true)), { tab: 'penjualan' }),
+      kpi('Omzet', rpS(a.omz), d(chgHtml(chg(a.omz, aP.omz), true)), { tab: 'penjualan', title: rp(a.omz), bawah: spark('Omzet', aB.map(x => x.omz || null), rpS) }),
       pl.adaBiaya
         ? kpi('Laba operasional', rpS(pl.laba), '<div class="d">margin <b>' + pct(pl.margin) + '</b> · ' + poinHtml(plP.adaBiaya ? pl.margin - plP.margin : null, true) + '</div>',
-          { tab: 'profit', cls: pl.laba < 0 ? 'neg' : '', title: 'Omzet − bahan − karyawan − biaya tetap − biaya bulanan' })
+          { tab: 'profit', cls: pl.laba < 0 ? 'neg' : '', title: rp(pl.laba) + ' = omzet − bahan − karyawan − biaya tetap − biaya bulanan − pembelian lain', bawah: spark('Laba operasional', pB.map(x => x.adaBiaya && x.omz ? x.laba : null), rpS) })
         : kpi('Laba operasional', '–', '<div class="d">isi biaya karyawan & sewa di sheet</div>', { tab: 'profit' }),
-      kpi('Food cost', pct(a.fc), d(poinHtml(a.fc != null && aP.fc != null ? a.fc - aP.fc : null, false)), { tab: 'bahan', cls: a.fc > batas ? 'over' : '' }),
-      kpi('Biaya karyawan', pl.adaBiaya ? pct(pl.karyPct) : '–', pl.adaBiaya ? '<div class="d">' + rpS(pl.kary) + ' dari omzet</div>' : '<div class="d">belum diisi</div>', { tab: 'profit' }),
-      kpi('Rata-rata per struk', a.ticket ? rpS(a.ticket) : '–', a.struk ? d(chgHtml(chg(a.ticket, aP.ticket), true)) : '<div class="d">jumlah struk belum diisi</div>', { tab: 'penjualan' }),
-      kpi('Anomali', String(st.anomali.length), '<div class="d">' + tinggi + ' tinggi · ' + sedang + ' sedang</div>', { tab: 'anomali' })
+      kpi('Food cost', pct(a.fc), d(poinHtml(a.fc != null && aP.fc != null ? a.fc - aP.fc : null, false)), { tab: 'bahan', cls: a.fc > batas ? 'over' : '', title: 'Belanja bahan ÷ omzet · batas ' + pct(batas, 0), bawah: spark('Food cost', aB.map(x => x.fc), x => pct(x)) }),
+      kpi('Biaya karyawan', pl.adaBiaya ? pct(pl.karyPct) : '–', pl.adaBiaya ? '<div class="d"><b>' + rpS(pl.kary) + '</b> dari omzet</div>' : '<div class="d">belum diisi</div>',
+        { tab: 'profit', bawah: pl.adaBiaya ? spark('Biaya karyawan', pB.map(x => x.adaBiaya ? x.karyPct : null), x => pct(x)) : '' }),
+      kpi('Rata-rata per struk', a.ticket ? rpS(a.ticket) : '–', a.struk ? d(chgHtml(chg(a.ticket, aP.ticket), true)) : '<div class="d">jumlah struk belum diisi</div>',
+        { tab: 'penjualan', bawah: a.struk ? spark('Rata-rata per struk', aB.map(x => x.ticket || null), rpS) : '' }),
+      kpi('Anomali', String(total), '<div class="d">' + (total ? '<b>' + tinggi + '</b> tinggi · <b>' + sedang + '</b> sedang · ' + rendah + ' rendah' : 'tidak ada temuan') + '</div>', { tab: 'anomali', bawah: meter })
     ].join('');
   }
+
+  /* ---------- judul cakupan & preset periode ---------- */
+  const labelPeriode = (a, b) => {
+    const nb = x => NAMA_BULAN[Number(x.slice(5, 7)) - 1], th = x => x.slice(0, 4);
+    if (a === b) return nb(a) + ' ' + th(a);
+    return th(a) === th(b) ? nb(a) + ' – ' + nb(b) + ' ' + th(b) : nb(a) + ' ' + th(a) + ' – ' + nb(b) + ' ' + th(b);
+  };
+  function renderScope() {
+    const sc = st.scope, D = st.data, bulanIni = today().slice(0, 7);
+    const nama = sc.store ? (D.stores.find(s => s.kode === sc.store) || {}).nama || sc.store : sc.brand ? sc.brand + ' · ' + sc.storeList.length + ' outlet' : 'Semua outlet · ' + D.stores.length + ' outlet';
+    $('#scopeTitle').textContent = labelPeriode(sc.dari, sc.sampai);
+    $('#scopeSub').textContent = nama + ' · dibanding ' + labelPeriode(sc.prevDari, sc.prevSampai) +
+      (sc.sampai >= bulanIni && sc.dari <= bulanIni ? ' · ' + NAMA_BULAN[Number(bulanIni.slice(5, 7)) - 1] + ' masih berjalan (hari ke-' + Number(today().slice(8, 10)) + ')' : '');
+    const opsi = [...$('#fSampai').options].map(o => o.value), akhir = opsi[opsi.length - 1];
+    $$('#presets button').forEach(b => b.classList.toggle('on', sc.sampai === akhir && sc.bulan.length === Number(b.dataset.n)));
+  }
+  $$('#presets button').forEach(b => b.addEventListener('click', () => {
+    if (!st.data) return;
+    const opsi = [...$('#fSampai').options].map(o => o.value), akhir = opsi[opsi.length - 1];
+    let dari = shiftMonth(akhir, -(Number(b.dataset.n) - 1));
+    if (dari < opsi[0]) dari = opsi[0];
+    $('#fSampai').value = akhir; $('#fDari').value = dari; simpanUi(); render();
+  }));
+
+  /* ---------- tema ---------- */
+  const mqGelap = window.matchMedia ? window.matchMedia('(prefers-color-scheme: dark)') : null;
+  const temaAktif = () => document.documentElement.dataset.theme || (mqGelap && mqGelap.matches ? 'dark' : 'light');
+  const IKON_TEMA = { dark: '<svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>',
+    light: '<svg class="i" viewBox="0 0 24 24"><path d="M12 3a9 9 0 1 0 9 9 7 7 0 0 1-9-9z"/></svg>' };
+  function setIkonTema() { $('#btnTema').innerHTML = IKON_TEMA[temaAktif()]; $('#btnTema').title = temaAktif() === 'dark' ? 'Pakai tema terang' : 'Pakai tema gelap'; }
+  $('#btnTema').addEventListener('click', () => {
+    const baru = temaAktif() === 'dark' ? 'light' : 'dark';
+    document.documentElement.dataset.theme = baru;
+    try { localStorage.setItem('hppdash.tema', baru); } catch (e) { /* abaikan */ } // dibaca juga oleh skrip kecil di <head>
+    setIkonTema(); render();
+  });
+  if (mqGelap && mqGelap.addEventListener) mqGelap.addEventListener('change', () => { if (!document.documentElement.dataset.theme) { setIkonTema(); render(); } });
+  setIkonTema();
 
   /* ---------- tabs ---------- */
   const TABS = ['ringkasan', 'outlet', 'penjualan', 'profit', 'bahan', 'anomali'];
@@ -283,7 +355,7 @@
     // omzet per bulan, ditumpuk per outlet
     const tampil = stores.slice(0, 8);
     gambar('chOmzetBulan', 'bar', bulan.map(labelBulan), tampil.map(s => ({
-      label: s.kode, backgroundColor: W[s.kode], borderColor: css('--surface'), borderWidth: { top: 2 },
+      label: s.kode, backgroundColor: W[s.kode],
       data: bulan.map(b => sum(D.omzet.filter(r => r.store === s.kode && r.bulan === b).map(r => r.omzet)) || null)
     })), { stacked: true });
 
@@ -292,7 +364,7 @@
     const ds = [
       { label: 'Food cost', data: pls.map(p => p.fc), borderColor: css('--s2'), backgroundColor: css('--s2') },
       { label: 'Biaya karyawan', data: pls.map(p => p.adaBiaya ? p.karyPct : null), borderColor: css('--s5'), backgroundColor: css('--s5') },
-      { label: 'Margin operasional', data: pls.map(p => p.adaBiaya ? p.margin : null), borderColor: css('--s1'), backgroundColor: css('--s1'), borderWidth: 3 }
+      { label: 'Margin operasional', data: pls.map(p => p.adaBiaya ? p.margin : null), borderColor: css('--s1'), backgroundColor: css('--s1') }
     ];
     gambar('chRasio', 'line', bulan.map(labelBulan), ds, { persen: true });
 
@@ -306,12 +378,12 @@
     const tot = plScope(sc, sc.dari, sc.sampai), totP = plScope(sc, sc.prevDari, sc.prevSampai), aTot = agScope(sc, sc.dari, sc.sampai);
     const batas = D.batasFoodCost || 0.35;
     const sel = (p, pp, a, extra) =>
-      '<td class="n">' + rp(p.omz) + '</td><td class="n">' + chgHtml(chg(p.omz, pp.omz), true) + '</td>' +
+      tdJ(p.omz) + '<td class="n">' + chgHtml(chg(p.omz, pp.omz), true) + '</td>' +
       '<td class="n' + (p.fc > batas ? ' over' : '') + '">' + pct(p.fc) + '</td>' +
       '<td class="n">' + (p.adaBiaya ? pct(p.karyPct) : '–') + '</td>' +
-      '<td class="n' + (p.adaBiaya && p.laba < 0 ? ' neg' : '') + '">' + (p.adaBiaya ? rp(p.laba) : '–') + '</td>' +
+      (p.adaBiaya ? tdJ(p.laba, p.laba < 0 ? 'neg' : '') : '<td class="n">–</td>') +
       '<td class="n' + (p.adaBiaya && p.margin < 0 ? ' neg' : '') + '"><b>' + (p.adaBiaya ? pct(p.margin) : '–') + '</b></td>' +
-      '<td class="n">' + (a.ticket ? rp(a.ticket) : '–') + '</td>' + (extra || '');
+      '<td class="n">' + (a.ticket ? rpS(a.ticket) : '–') + '</td>' + (extra || '');
     $('#tbPerforma').innerHTML = '<thead><tr><th>Outlet</th><th>Status</th><th class="n">Omzet</th><th class="n">vs sblm</th><th class="n">Food cost</th><th class="n">Karyawan</th>' +
       '<th class="n">Laba operasional</th><th class="n">Margin</th><th class="n">Per struk</th><th class="n">Anomali</th></tr></thead><tbody>' +
       (rows.length ? rows.map(r => '<tr class="klik" data-s="' + esc(r.s.kode) + '"><td><span class="sw" style="background:' + W[r.s.kode] + '"></span><b>' + esc(r.s.kode) + '</b> ' + esc(r.s.nama) + '</td>' +
@@ -326,7 +398,7 @@
       brands.map(b => {
         const ks = stores.filter(s => s.brand === b).map(s => s.kode);
         const p = hitungPL(x => ks.includes(x), sc.dari, sc.sampai);
-        return '<tr><td><b>' + esc(b) + '</b></td><td class="n">' + ks.length + '</td><td class="n">' + rp(p.omz) + '</td><td class="n">' + pct(tot.omz ? p.omz / tot.omz : null) + '</td>' +
+        return '<tr><td><b>' + esc(b) + '</b></td><td class="n">' + ks.length + '</td>' + tdJ(p.omz) + '<td class="n">' + pct(tot.omz ? p.omz / tot.omz : null) + '</td>' +
           '<td class="n' + (p.fc > batas ? ' over' : '') + '">' + pct(p.fc) + '</td><td class="n' + (p.adaBiaya && p.margin < 0 ? ' neg' : '') + '">' + (p.adaBiaya ? pct(p.margin) : '–') + '</td></tr>';
       }).join('') + '</tbody>';
 
@@ -335,7 +407,7 @@
     $('#perhatian').innerHTML = top.length ? top.map((a, i) =>
       '<div class="ph"><span class="lvl ' + a.level + '"><i>' + LEVEL[a.level][0] + '</i>' + LEVEL[a.level][1] + '</span><div><div class="t">' + esc(a.judul) + '</div>' +
       '<div class="m">' + esc([a.bulan ? labelBulan(a.bulan) : '', a.dampak ? 'dampak ±' + rpS(a.dampak) : ''].filter(Boolean).join(' · ')) + '</div></div>' +
-      (a.grafik ? '<button class="btn ghost small" data-ph="' + i + '">Grafik</button>' : '') + '</div>').join('')
+      (a.grafik ? '<button class="btn outline small" data-ph="' + i + '">Grafik</button>' : '') + '</div>').join('')
       : '<div class="kosong">Tidak ada anomali tinggi/sedang untuk filter ini. 👍</div>';
     $$('#perhatian button[data-ph]').forEach(b => b.addEventListener('click', () => { const a = top[Number(b.dataset.ph)]; bukaGrafik(a.grafik, a); }));
 
@@ -346,10 +418,10 @@
       trenBulan.map(b => {
         const p = plScope(sc, b, b), pPrev = plScope(sc, shiftMonth(b, -1), shiftMonth(b, -1)), a = agScope(sc, b, b);
         return '<tr><td><b>' + labelBulan(b) + '</b>' + (b === today().slice(0, 7) ? ' <span class="hint">(berjalan)</span>' : '') + '</td>' +
-          '<td class="n">' + rp(p.omz) + '</td><td class="n">' + chgHtml(chg(p.omz, pPrev.omz), true) + '</td><td class="n">' + rp(p.hpp) + '</td>' +
-          '<td class="n' + (p.fc > batas ? ' over' : '') + '">' + pct(p.fc) + '</td><td class="n">' + (p.adaBiaya ? rp(p.kary) : '–') + '</td>' +
-          '<td class="n">' + (p.adaBiaya || p.ops || p.pemb ? rp(p.tetap + p.ops + p.pemb) : '–') + '</td>' +
-          '<td class="n' + (p.adaBiaya && p.laba < 0 ? ' neg' : '') + '">' + (p.adaBiaya ? rp(p.laba) : '–') + '</td>' +
+          tdJ(p.omz) + '<td class="n">' + chgHtml(chg(p.omz, pPrev.omz), true) + '</td>' + tdJ(p.hpp) +
+          '<td class="n' + (p.fc > batas ? ' over' : '') + '">' + pct(p.fc) + '</td>' + (p.adaBiaya ? tdJ(p.kary) : '<td class="n">–</td>') +
+          (p.adaBiaya || p.ops || p.pemb ? tdJ(p.tetap + p.ops + p.pemb) : '<td class="n">–</td>') +
+          (p.adaBiaya ? tdJ(p.laba, p.laba < 0 ? 'neg' : '') : '<td class="n">–</td>') +
           '<td class="n"><b>' + (p.adaBiaya ? pct(p.margin) : '–') + '</b></td><td class="n">' + (a.struk ? num(a.struk, 0) : '–') + '</td></tr>';
       }).join('') + '</tbody>';
   }
@@ -359,17 +431,21 @@
     const sc = st.scope, D = st.data, W = warnaStore();
     const brand = $('#fBrand').value;
     const list = D.stores.filter(s => !brand || s.brand === brand);
+    const blO = bulanGrafik(sc), mulaiO = Math.max(0, blO.indexOf(sc.dari));
     $('#outletGrid').innerHTML = list.map(s => {
       const p = plOutlet(s.kode, sc.dari, sc.sampai), pp = plOutlet(s.kode, sc.prevDari, sc.prevSampai);
+      const trenO = blO.map(b => sum(D.omzet.filter(r => r.store === s.kode && r.bulan === b).map(r => r.omzet)) || null);
       const a = agregat(x => x === s.kode, sc.dari, sc.sampai);
       const an = Anomali.deteksi(D, { bulanDari: sc.dari, bulanSampai: sc.sampai, storeSet: new Set([s.kode]), hariIni: today() });
       const stt = statusOutlet(p, an.filter(x => x.level === 'tinggi').length);
       return '<button class="ocard' + (sc.store === s.kode ? ' on' : '') + '" style="--c:' + W[s.kode] + '" data-s="' + esc(s.kode) + '">' +
-        '<div class="oh"><div><div class="on1">' + esc(s.kode) + ' · ' + esc(s.nama.replace(s.brand + ' - ', '')) + '</div><div class="on2">' + esc(s.brand) + '</div></div>' + statusHtml(stt) + '</div>' +
-        '<div class="om"><div><span>Omzet</span><b>' + rpS(p.omz) + '</b><small>' + chgHtml(chg(p.omz, pp.omz), true) + '</small></div>' +
-        '<div><span>Margin</span><b class="' + (p.adaBiaya && p.margin < 0 ? 'neg' : '') + '">' + (p.adaBiaya ? pct(p.margin) : '–') + '</b></div>' +
-        '<div><span>Food cost</span><b>' + pct(p.fc) + '</b></div>' +
-        '<div><span>Anomali</span><b>' + an.length + '</b>' + (an.some(x => x.level === 'tinggi') ? '<small class="up">▲ ada tinggi</small>' : '') + '</div></div></button>';
+        '<div class="on1">' + esc(s.kode) + ' · ' + esc(s.nama.replace(s.brand + ' - ', '')) + '</div>' +
+        '<div class="oh"><span class="on2">' + esc(s.brand) + '</span>' + statusHtml(stt) + '</div>' +
+        '<div class="obig"><div class="lbl">Omzet</div><div class="ov"><b>' + rpS(p.omz) + '</b><small>' + chgHtml(chg(p.omz, pp.omz), true) + '</small></div>' +
+          sparkSvg(trenO, mulaiO, { warna: W[s.kode], cls: 'ospark', h: 30, label: 'Omzet ' + s.kode + ' per bulan' }) + '</div>' +
+        '<div class="om"><div><span>Margin</span><b class="' + (p.adaBiaya && p.margin < 0 ? 'neg' : '') + '">' + (p.adaBiaya ? pct(p.margin) : '–') + '</b></div>' +
+        '<div><span>Food cost</span><b class="' + (p.fc > (D.batasFoodCost || 0.35) ? 'over' : '') + '">' + pct(p.fc) + '</b></div>' +
+        '<div><span>Anomali</span><b>' + an.length + '</b>' + (an.some(x => x.level === 'tinggi') ? '<small class="up">▲</small>' : '') + '</div></div></button>';
     }).join('') || '<div class="kosong">Belum ada outlet.</div>';
     $$('#outletGrid .ocard').forEach(c => c.addEventListener('click', () => {
       if (st.scope.store === c.dataset.s) { $('#fStore').value = ''; simpanUi(); render(); } else pilihOutlet(c.dataset.s);
@@ -403,12 +479,16 @@
     // omzet harian
     const tgl = [...new Set(a.O.map(r => r.tgl))].sort();
     const og = groupBy(a.O, r => r.tgl);
-    gambar('chOHarian', 'line', tgl.map(labelTgl), [{ label: s.kode, data: tgl.map(t => sum(og.get(t).map(r => r.omzet))), borderColor: W[s.kode], backgroundColor: W[s.kode] }], { tanpaTitik: true });
+    const harianO = tgl.map(t => sum(og.get(t).map(r => r.omzet)));
+    gambar('chOHarian', 'line', tgl.map(labelTgl), [
+      { label: 'Omzet harian', data: harianO, borderColor: W[s.kode], backgroundColor: alpha(W[s.kode], 0.1), fill: 'origin' },
+      { label: 'Rata-rata 7 hari', data: rata7(harianO), borderColor: css('--ink-2'), backgroundColor: css('--ink-2'), borderWidth: 1.5 }
+    ], { tanpaTitik: true });
     // margin & fc per bulan
     const bl = bulanGrafik(sc);
     const pb = bl.map(b => plOutlet(s.kode, b, b));
     gambar('chOBulan', 'line', bl.map(labelBulan), [
-      { label: 'Margin operasional', data: pb.map(x => x.adaBiaya ? x.margin : null), borderColor: css('--s1'), backgroundColor: css('--s1'), borderWidth: 3 },
+      { label: 'Margin operasional', data: pb.map(x => x.adaBiaya ? x.margin : null), borderColor: css('--s1'), backgroundColor: css('--s1') },
       { label: 'Food cost', data: pb.map(x => x.fc), borderColor: css('--s2'), backgroundColor: css('--s2') },
       { label: 'Karyawan', data: pb.map(x => x.adaBiaya ? x.karyPct : null), borderColor: css('--s5'), backgroundColor: css('--s5') }
     ], { persen: true });
@@ -419,14 +499,14 @@
     const omzBln = sum(D.omzet.filter(r => r.store === s.kode && r.bulan === sc.sampai).map(r => r.omzet));
     $('#tbOTim').innerHTML = tim.length
       ? '<thead><tr><th>Jabatan</th><th class="n">Orang</th><th class="n">Biaya/bln</th><th class="n">% omzet</th></tr></thead><tbody>' +
-        tim.sort((x, y) => y.jumlah - x.jumlah).map(r => '<tr><td>' + esc(r.kategori) + '</td><td class="n">' + (r.orang || '–') + '</td><td class="n">' + rp(r.jumlah) + '</td><td class="n">' + pct(omzBln ? r.jumlah / omzBln : null) + '</td></tr>').join('') +
-        '</tbody><tfoot><tr><td>Total</td><td class="n">' + (sum(tim.map(r => r.orang)) || '–') + '</td><td class="n">' + rp(sum(tim.map(r => r.jumlah))) + '</td><td class="n">' + pct(omzBln ? sum(tim.map(r => r.jumlah)) / omzBln : null) + '</td></tr></tfoot>'
+        tim.sort((x, y) => y.jumlah - x.jumlah).map(r => '<tr><td>' + esc(r.kategori) + '</td><td class="n">' + (r.orang || '–') + '</td>' + tdJ(r.jumlah) + '<td class="n">' + pct(omzBln ? r.jumlah / omzBln : null) + '</td></tr>').join('') +
+        '</tbody><tfoot><tr><td>Total</td><td class="n">' + (sum(tim.map(r => r.orang)) || '–') + '</td>' + tdJ(sum(tim.map(r => r.jumlah))) + '<td class="n">' + pct(omzBln ? sum(tim.map(r => r.jumlah)) / omzBln : null) + '</td></tr></tfoot>'
       : '<tbody><tr><td class="hint">Belum ada data karyawan untuk outlet ini (isi MASTER_KARYAWAN).</td></tr></tbody>';
     // bahan
     const gb = [...groupBy(a.B, r => r.bahan).entries()].map(([b, rs]) => ({ b, sat: rs[0].satuan, qty: sum(rs.map(r => r.qty)), tot: sum(rs.map(r => r.total)) }))
       .sort((x, y) => y.tot - x.tot).slice(0, 10);
     $('#tbOBahan').innerHTML = '<thead><tr><th>Bahan</th><th class="n">Qty</th><th class="n">Belanja</th><th class="n">% omzet</th><th class="n">Harga rata²</th></tr></thead><tbody>' +
-      (gb.length ? gb.map(x => '<tr class="klik" data-b="' + esc(x.b) + '"><td>' + esc(x.b) + '</td><td class="n">' + num(x.qty) + ' ' + esc(x.sat) + '</td><td class="n">' + rp(x.tot) + '</td><td class="n">' + pct(p.omz ? x.tot / p.omz : null) + '</td><td class="n">' + rp(x.qty ? x.tot / x.qty : 0) + '</td></tr>').join('')
+      (gb.length ? gb.map(x => '<tr class="klik" data-b="' + esc(x.b) + '"><td>' + esc(x.b) + '</td><td class="n">' + num(x.qty) + ' ' + esc(x.sat) + '</td>' + tdJ(x.tot) + '<td class="n">' + pct(p.omz ? x.tot / p.omz : null) + '</td><td class="n">' + rp(x.qty ? x.tot / x.qty : 0) + '</td></tr>').join('')
         : '<tr><td colspan="5" class="hint">Belum ada belanja.</td></tr>') + '</tbody>';
     $$('#tbOBahan tr.klik').forEach(tr => tr.addEventListener('click', () => bukaGrafik({ tipe: 'harga', bahan: tr.dataset.b, store: s.kode })));
     // anomali
@@ -437,12 +517,12 @@
 
   function tabelPL(p) {
     if (!p.omz) return '<tbody><tr><td class="hint">Belum ada omzet pada periode ini.</td></tr></tbody>';
-    const b = (l, v, cls) => '<tr' + (cls ? ' class="' + cls + '"' : '') + '><td>' + l + '</td><td class="n' + (v < 0 ? ' neg' : '') + '">' + rp(v) + '</td><td class="n">' + pct(v / p.omz) + '</td></tr>';
+    const b = (l, v, cls) => '<tr' + (cls ? ' class="' + cls + '"' : '') + '><td>' + l + '</td>' + tdJ(v, cls === 'laba' && v < 0 ? 'neg' : v < 0 ? 'biaya' : '') + '<td class="n' + (v < 0 ? ' biaya' : '') + '">' + pct(v / p.omz) + '</td></tr>';
     return '<thead><tr><th>Pos</th><th class="n">Rupiah</th><th class="n">% omzet</th></tr></thead><tbody>' +
-      b('Omzet', p.omz) + b('− HPP bahan baku', -p.hpp) + b('<b>Laba kotor</b>', p.lk) +
+      b('Omzet', p.omz) + b('− HPP bahan baku', -p.hpp) + b('<b>Laba kotor</b>', p.lk, 'laba') +
       (p.adaBiaya ? b('− Karyawan', -p.kary) + b('− Biaya tetap (sewa, dll)', -p.tetap) + b('− Biaya bulanan (listrik, dll)', -p.ops) : '') +
       (p.pemb ? b('− Pembelian lain (non-bahan)', -p.pemb) : '') +
-      '</tbody><tfoot><tr><td>Laba operasional</td><td class="n' + (p.laba < 0 ? ' neg' : '') + '">' + (p.adaBiaya ? rp(p.laba) : '–') + '</td><td class="n' + (p.margin < 0 ? ' neg' : '') + '">' + (p.adaBiaya ? pct(p.margin) : 'isi biaya') + '</td></tr></tfoot>';
+      '</tbody><tfoot><tr><td>Laba operasional</td>' + (p.adaBiaya ? tdJ(p.laba, p.laba < 0 ? 'neg' : '') : '<td class="n">–</td>') + '<td class="n' + (p.margin < 0 ? ' neg' : '') + '">' + (p.adaBiaya ? pct(p.margin) : 'isi biaya') + '</td></tr></tfoot>';
   }
 
   /* ================= PENJUALAN ================= */
@@ -452,12 +532,13 @@
     const a = agScope(sc, sc.dari, sc.sampai);
     const tgl = [...new Set(a.O.map(r => r.tgl))].sort();
     const tampil = stores.slice(0, 8);
-    const og = groupBy(a.O, r => r.store + '|' + r.tgl);
-    gambar('chHarian', 'line', tgl.map(labelTgl), tampil.map(s => ({
-      label: s.kode, borderColor: W[s.kode], backgroundColor: W[s.kode], spanGaps: false,
-      data: tgl.map(t => { const r = og.get(s.kode + '|' + t); return r ? sum(r.map(x => x.omzet)) : null; })
-    })), { tanpaTitik: true });
-    $('#harianNote').textContent = tgl.length ? tgl.length + ' hari · titik kosong = omzet belum diinput' : 'belum ada omzet';
+    const ogT = groupBy(a.O, r => r.tgl), harian = tgl.map(t => sum(ogT.get(t).map(r => r.omzet)));
+    const w1 = css('--s1');
+    gambar('chHarian', 'line', tgl.map(labelTgl), [
+      { label: 'Omzet harian', data: harian, borderColor: w1, backgroundColor: alpha(w1, 0.1), fill: 'origin' },
+      { label: 'Rata-rata 7 hari', data: rata7(harian), borderColor: css('--s2'), backgroundColor: css('--s2') }
+    ], { tanpaTitik: true });
+    $('#harianNote').textContent = tgl.length ? (sc.store ? sc.store : sc.storeSet ? 'gabungan outlet dipilih' : 'gabungan semua outlet') + ' · ' + tgl.length + ' hari tercatat · perbandingan per outlet di tabel bawah' : 'belum ada omzet';
 
     // per hari dalam minggu: total omzet outlet dipilih per tanggal → rata-rata per hari
     const perTgl = groupBy(a.O, r => r.tgl);
@@ -482,11 +563,11 @@
     $('#tbPenjualan').innerHTML = '<thead><tr><th>Outlet</th><th class="n">Omzet</th><th class="n">vs sblm</th><th class="n">Porsi</th><th class="n">Hari</th><th class="n">Rata²/hari</th>' +
       '<th class="n">Struk</th><th class="n">Per struk</th><th class="n">Hari terbaik</th></tr></thead><tbody>' +
       rows.map(r => '<tr class="klik" data-s="' + esc(r.s.kode) + '"><td><span class="sw" style="background:' + W[r.s.kode] + '"></span><b>' + esc(r.s.kode) + '</b> ' + esc(r.s.nama) + '</td>' +
-        '<td class="n">' + rp(r.x.omz) + '</td><td class="n">' + chgHtml(chg(r.x.omz, r.xp.omz), true) + '</td><td class="n">' + pct(a.omz ? r.x.omz / a.omz : null) + '</td>' +
-        '<td class="n">' + r.nHari + '</td><td class="n">' + rp(r.nHari ? r.x.omz / r.nHari : 0) + '</td><td class="n">' + (r.x.struk ? num(r.x.struk, 0) : '–') + '</td>' +
-        '<td class="n">' + (r.x.ticket ? rp(r.x.ticket) : '–') + '</td><td class="n">' + (r.best ? labelTgl(r.best[0]) + ' · ' + rpS(r.best[1]) : '–') + '</td></tr>').join('') +
-      '</tbody><tfoot><tr><td>Total</td><td class="n">' + rp(a.omz) + '</td><td class="n">' + chgHtml(chg(a.omz, agScope(sc, sc.prevDari, sc.prevSampai).omz), true) + '</td><td class="n">100%</td>' +
-      '<td class="n">' + tgl.length + '</td><td class="n">' + rp(tgl.length ? a.omz / tgl.length : 0) + '</td><td class="n">' + (a.struk ? num(a.struk, 0) : '–') + '</td><td class="n">' + (a.ticket ? rp(a.ticket) : '–') + '</td><td></td></tr></tfoot>';
+        tdJ(r.x.omz) + '<td class="n">' + chgHtml(chg(r.x.omz, r.xp.omz), true) + '</td><td class="n">' + pct(a.omz ? r.x.omz / a.omz : null) + '</td>' +
+        '<td class="n">' + r.nHari + '</td><td class="n">' + rpS(r.nHari ? r.x.omz / r.nHari : 0) + '</td><td class="n">' + (r.x.struk ? num(r.x.struk, 0) : '–') + '</td>' +
+        '<td class="n">' + (r.x.ticket ? rpS(r.x.ticket) : '–') + '</td><td class="n">' + (r.best ? labelTgl(r.best[0]) + ' · ' + rpS(r.best[1]) : '–') + '</td></tr>').join('') +
+      '</tbody><tfoot><tr><td>Total</td>' + tdJ(a.omz) + '<td class="n">' + chgHtml(chg(a.omz, agScope(sc, sc.prevDari, sc.prevSampai).omz), true) + '</td><td class="n">100%</td>' +
+      '<td class="n">' + tgl.length + '</td><td class="n">' + rpS(tgl.length ? a.omz / tgl.length : 0) + '</td><td class="n">' + (a.struk ? num(a.struk, 0) : '–') + '</td><td class="n">' + (a.ticket ? rpS(a.ticket) : '–') + '</td><td></td></tr></tfoot>';
     $$('#tbPenjualan tr.klik').forEach(tr => tr.addEventListener('click', () => pilihOutlet(tr.dataset.s)));
   }
 
@@ -508,13 +589,13 @@
       (bulan.includes(today().slice(0, 7)) ? ' · bulan berjalan: biaya tetap dihitung proporsional' : '');
 
     const rows = stores.map(s => Object.assign({ s }, plOutlet(s.kode, sc.dari, sc.sampai))).sort((a, b) => (b.margin ?? -9) - (a.margin ?? -9));
-    const td = (v, neg) => '<td class="n' + (neg && v < 0 ? ' neg' : '') + '">' + (v == null ? '–' : rp(v)) + '</td>';
+    const td = (v, neg) => v == null ? '<td class="n">–</td>' : tdJ(v, neg && v < 0 ? 'neg' : '');
     const tdp = (v, neg) => '<td class="n' + (neg && v < 0 ? ' neg' : '') + '">' + pct(v) + '</td>';
-    const baris = (r, label) => '<td>' + label + '</td>' + td(r.omz) + td(r.hpp) + td(r.lk, true) + tdp(r.lkPct) +
-      td(r.kary) + td(r.tetap) + td(r.ops) + td(r.pemb) + td(r.adaBiaya ? r.laba : null, true) + tdp(r.adaBiaya ? r.margin : null, true) + tdp(r.adaBiaya ? r.karyPct : null);
-    $('#tbProfit').innerHTML = '<thead><tr><th>Outlet</th><th class="n">Omzet</th><th class="n">HPP bahan</th><th class="n">Laba kotor</th><th class="n">%</th>' +
-      '<th class="n">Karyawan</th><th class="n">Biaya tetap</th><th class="n">Biaya bulanan</th><th class="n">Pembelian lain</th><th class="n">Laba operasional</th><th class="n">Margin</th><th class="n">Karyawan %</th></tr></thead><tbody>' +
-      rows.map(r => '<tr class="klik" data-s="' + esc(r.s.kode) + '">' + baris(r, '<span class="sw" style="background:' + W[r.s.kode] + '"></span><b>' + esc(r.s.kode) + '</b> ' + esc(r.s.nama)) + '</tr>').join('') +
+    const baris = (r, label) => '<td>' + label + '</td>' + td(r.omz) + td(r.hpp) + td(r.lk, true) +
+      td(r.kary) + td(r.tetap) + td(r.ops) + td(r.pemb) + td(r.adaBiaya ? r.laba : null, true) + '<td class="n' + (r.adaBiaya && r.margin < 0 ? ' neg' : '') + '"><b>' + (r.adaBiaya ? pct(r.margin) : '–') + '</b></td>';
+    $('#tbProfit').innerHTML = '<thead><tr><th>Outlet</th><th class="n">Omzet</th><th class="n">HPP bahan</th><th class="n">Laba kotor</th>' +
+      '<th class="n">Karyawan</th><th class="n">Biaya tetap</th><th class="n">Biaya bulanan</th><th class="n">Pembelian lain</th><th class="n">Laba operasional</th><th class="n">Margin</th></tr></thead><tbody>' +
+      rows.map(r => '<tr class="klik" data-s="' + esc(r.s.kode) + '">' + baris(r, '<span class="sw" style="background:' + W[r.s.kode] + '"></span><b>' + esc(r.s.kode) + '</b>') + '</tr>').join('') +
       '</tbody><tfoot><tr>' + baris(total, 'Total ' + (sc.storeSet ? 'outlet dipilih' : 'semua outlet')) + '</tr></tfoot>';
     $$('#tbProfit tr.klik').forEach(tr => tr.addEventListener('click', () => bukaRincian(tr.dataset.s)));
 
@@ -526,8 +607,8 @@
     });
     pos.sort((x, y) => y[2] - x[2]);
     $('#tbPos').innerHTML = '<thead><tr><th>Pos biaya</th><th>Kelompok</th><th class="n">Rupiah</th><th class="n">% omzet</th></tr></thead><tbody>' +
-      pos.map(x => '<tr><td>' + esc(x[0]) + '</td><td class="hint">' + x[1] + '</td><td class="n">' + rp(x[2]) + '</td><td class="n">' + pct(total.omz ? x[2] / total.omz : null) + '</td></tr>').join('') +
-      '</tbody><tfoot><tr><td>Total biaya</td><td></td><td class="n">' + rp(sum(pos.map(x => x[2]))) + '</td><td class="n">' + pct(total.omz ? sum(pos.map(x => x[2])) / total.omz : null) + '</td></tr></tfoot>';
+      pos.map(x => '<tr><td>' + esc(x[0]) + '</td><td class="hint">' + x[1] + '</td>' + tdJ(x[2]) + '<td class="n">' + pct(total.omz ? x[2] / total.omz : null) + '</td></tr>').join('') +
+      '</tbody><tfoot><tr><td>Total biaya</td><td></td>' + tdJ(sum(pos.map(x => x[2]))) + '<td class="n">' + pct(total.omz ? sum(pos.map(x => x[2])) / total.omz : null) + '</td></tr></tfoot>';
   }
 
   function bukaRincian(kode) {
@@ -557,7 +638,7 @@
     const sc = st.scope, D = st.data, W = warnaStore();
     const a = agScope(sc, sc.dari, sc.sampai);
     const kat = [...groupBy(a.B, r => r.kategori).entries()].map(([k, rs]) => [k, sum(rs.map(r => r.total))]).sort((x, y) => y[1] - x[1]);
-    gambar('chKategori', 'bar', kat.map(x => x[0]), [{ label: '% omzet', data: kat.map(x => a.omz ? x[1] / a.omz : null), backgroundColor: css('--s2'), borderColor: css('--s2') }], { persen: true, horizontal: true });
+    gambar('chKategori', 'bar', kat.map(x => x[0]), [{ label: '% omzet', data: kat.map(x => a.omz ? x[1] / a.omz : null), backgroundColor: css('--s1'), borderColor: css('--s1') }], { persen: true, horizontal: true });
 
     const batas = D.batasFoodCost || 0.35, bl = bulanGrafik(sc);
     const stores = D.stores.filter(s => inStore(sc, s.kode)).slice(0, 8);
@@ -615,7 +696,7 @@
     $('#tbItem').innerHTML = '<thead><tr><th>Bahan</th><th>Kategori</th><th class="n">Qty</th><th class="n">Belanja</th><th class="n">Porsi</th><th class="n">Harga rata²</th><th class="n">vs sebelumnya</th><th class="n">Anomali</th></tr></thead><tbody>' +
       (rows.length ? rows.map(r =>
         '<tr class="klik" data-b="' + esc(r.bahan) + '"><td><b>' + esc(r.bahan) + '</b></td><td>' + esc(r.kat) + '</td>' +
-        '<td class="n">' + num(r.qty) + ' ' + esc(r.sat) + '</td><td class="n">' + rp(r.tot) + '</td><td class="n">' + pct(total ? r.tot / total : 0) + '</td>' +
+        '<td class="n">' + num(r.qty) + ' ' + esc(r.sat) + '</td>' + tdJ(r.tot) + '<td class="n">' + pct(total ? r.tot / total : 0) + '</td>' +
         '<td class="n">' + rp(r.h) + '/' + esc(r.sat) + '</td><td class="n">' + chgHtml(r.chg, false) + '</td>' +
         '<td class="n"><span class="badge' + (r.n ? ' hot' : '') + '">' + r.n + '</span></td></tr>').join('')
         : '<tr><td colspan="8" class="hint">Tidak ada data belanja untuk filter ini.</td></tr>') + '</tbody>';
@@ -646,7 +727,7 @@
       '<span class="meta">' + esc([a.bulan ? labelBulan(a.bulan) : '', a.namaStore].filter(Boolean).join(' · ')) + '</span></div>' +
       '<h3>' + esc(a.judul) + '</h3><p>' + esc(a.detail) + '</p>' +
       '<div class="an-foot"><span class="dampak">' + (a.dampak ? 'Dampak ±<b>' + rpS(a.dampak) + '</b>' : '') + '</span>' +
-      (a.grafik ? '<button class="btn ghost" data-g="' + id + '">Lihat grafik</button>' : '') + '</div></article>';
+      (a.grafik ? '<button class="btn outline small" data-g="' + id + '">Lihat grafik</button>' : '') + '</div></article>';
   }
   function pasangGrafikAnomali(root, list, prefix) {
     $$(root + ' button[data-g]').forEach(b => b.addEventListener('click', () => { const a = list[Number(b.dataset.g.slice(prefix.length))]; bukaGrafik(a.grafik, a); }));
@@ -664,36 +745,96 @@
   }
 
   /* ================= grafik ================= */
+  /* Gaya grafik (spesifikasi dataviz): batang ≤24px ujung membulat 4px, celah 2px warna permukaan antar segmen,
+     garis 2px, titik ≥8px bercincin permukaan, grid garis rambut solid, legenda selalu ada untuk ≥2 seri,
+     tooltip: nilai dulu baru label, kunci berupa garis, crosshair vertikal di grafik garis. */
+  let chartSiap = false;
+  function siapkanChart() {
+    if (chartSiap || typeof Chart === 'undefined') return;
+    chartSiap = true;
+    Chart.defaults.font.family = css('--font') || 'system-ui, sans-serif';
+    Chart.defaults.font.size = 11.5;
+    Chart.register({
+      id: 'crosshair',
+      beforeDatasetsDraw(chart) {
+        if (chart.config.type !== 'line' || !chart.tooltip) return;
+        const act = chart.tooltip.getActiveElements();
+        if (!act.length) return;
+        const x = act[0].element.x, a = chart.chartArea, ctx = chart.ctx;
+        ctx.save(); ctx.beginPath(); ctx.moveTo(Math.round(x) + 0.5, a.top); ctx.lineTo(Math.round(x) + 0.5, a.bottom);
+        ctx.lineWidth = 1; ctx.strokeStyle = css('--axis'); ctx.stroke(); ctx.restore();
+      }
+    });
+  }
+
   function gambar(id, tipe, labels, datasets, o) {
     o = o || {};
+    siapkanChart();
     const el = document.getElementById(id);
     if (!el) return;
     if (st.charts[id]) st.charts[id].destroy();
-    const grid = css('--grid'), muted = css('--muted'), ink2 = css('--ink-2');
+    const surface = css('--surface'), grid = css('--grid'), muted = css('--muted'), ink = css('--ink'), ink2 = css('--ink-2'), axis = css('--axis'), line2 = css('--line-2');
     const fmt = v => v == null ? '–' : o.persen ? pct(v) : o.satuan ? rp(v) + '/' + o.satuan : o.qty ? num(v) + ' ' + (o.unit || '') : rp(v);
-    datasets.forEach(d => {
-      if (tipe === 'line') Object.assign(d, Object.assign({ borderWidth: 2, pointRadius: o.tanpaTitik ? 0 : 3, pointHoverRadius: 5, tension: 0, fill: false }, d));
-      if (tipe === 'bar') Object.assign(d, Object.assign({ borderRadius: o.stacked ? 0 : 4, maxBarThickness: 36, borderSkipped: 'start' }, d));
+    const rapat = labels.length > 16;
+    const ref = d => !!d.borderDash; // garis acuan (batas/impas)
+    datasets.forEach((d, i) => {
+      if (tipe === 'line') {
+        Object.assign(d, Object.assign({
+          borderWidth: 2, tension: 0, fill: false, borderCapStyle: 'round', borderJoinStyle: 'round', spanGaps: true,
+          pointRadius: ref(d) || o.tanpaTitik || rapat ? 0 : 4, pointBorderWidth: 2, pointBorderColor: surface,
+          pointHoverRadius: ref(d) ? 0 : 5, pointHoverBorderWidth: 2, pointHoverBorderColor: surface, pointHitRadius: 14
+        }, d));
+        if (ref(d)) { d.borderWidth = 1.5; d.borderDash = [5, 4]; }
+      }
+      if (tipe === 'bar') {
+        const atas = !o.stacked || i === datasets.length - 1;
+        Object.assign(d, Object.assign({ maxBarThickness: 24, borderSkipped: 'start' }, d));
+        d.borderColor = surface;
+        d.borderRadius = atas ? (o.stacked ? { topLeft: 4, topRight: 4 } : 4) : 0;
+        d.borderWidth = o.stacked && !atas ? { top: 2, right: 0, bottom: 0, left: 0 } : 0;
+        d.hoverBackgroundColor = d.backgroundColor;
+      }
     });
+    const kunci = c => { const w = tipe === 'bar' ? c.dataset.backgroundColor : c.dataset.borderColor; return { borderColor: w, backgroundColor: w, borderWidth: 2, borderDash: c.dataset.borderDash }; };
+    const nilaiDari = c => o.horizontal ? c.parsed.x : c.parsed.y;
     st.charts[id] = new Chart(el, {
       type: tipe, data: { labels, datasets },
       options: {
         responsive: true, maintainAspectRatio: false, animation: false,
         interaction: { mode: 'index', intersect: false },
         indexAxis: o.horizontal ? 'y' : 'x',
+        layout: { padding: { top: 4, right: 6 } },
         plugins: {
-          legend: { display: datasets.length > 1, position: 'bottom', labels: { usePointStyle: true, pointStyle: 'circle', boxWidth: 8, color: ink2, padding: 14 } },
+          legend: {
+            display: datasets.length > 1, position: 'top', align: 'start',
+            labels: { usePointStyle: true, pointStyle: tipe === 'line' ? 'line' : 'rectRounded', boxWidth: tipe === 'line' ? 18 : 9, boxHeight: 9,
+              color: ink2, padding: 14, font: { size: 11.5, weight: '500' },
+              // kunci legenda ikut warna seri (bukan warna cincin titik)
+              generateLabels: ch => Chart.defaults.plugins.legend.labels.generateLabels(ch).map(l => {
+                const d = ch.data.datasets[l.datasetIndex], w = tipe === 'bar' ? d.backgroundColor : d.borderColor;
+                return Object.assign(l, { fillStyle: w, strokeStyle: w, lineWidth: tipe === 'line' ? 2 : 0, lineDash: d.borderDash || [] });
+              }) }
+          },
           tooltip: {
+            backgroundColor: surface, titleColor: muted, bodyColor: ink, footerColor: ink2, borderColor: line2, borderWidth: 1,
+            padding: { x: 12, y: 10 }, cornerRadius: 10, caretSize: 0, caretPadding: 10, boxPadding: 6, usePointStyle: true,
+            titleFont: { size: 11.5, weight: '600' }, bodyFont: { size: 12.5, weight: '600' }, footerFont: { size: 12, weight: '700' },
+            titleMarginBottom: 8, bodySpacing: 5,
+            filter: c => !ref(c.dataset) && nilaiDari(c) != null,
+            itemSort: (a, b) => (nilaiDari(b) || 0) - (nilaiDari(a) || 0),
             callbacks: {
-              label: c => ' ' + c.dataset.label + ': ' + fmt(o.horizontal ? c.parsed.x : c.parsed.y),
-              footer: o.stacked ? items => 'Total: ' + fmt(sum(items.map(i => i.parsed.y || 0))) : undefined
+              label: c => ' ' + fmt(nilaiDari(c)) + '   ' + c.dataset.label,
+              labelColor: kunci,
+              labelPointStyle: () => ({ pointStyle: 'line', rotation: 0 }),
+              footer: o.stacked ? items => 'Total ' + fmt(sum(items.map(i => nilaiDari(i) || 0))) : undefined
             }
           }
         },
         scales: (() => {
-          const kat = { stacked: !!o.stacked, grid: { display: false }, border: { color: css('--line-strong') }, ticks: { color: muted, maxRotation: 0, autoSkip: !o.horizontal } };
-          const nilai = { stacked: !!o.stacked, beginAtZero: !o.persen || o.horizontal, grid: { color: grid }, border: { display: false },
-            ticks: { color: muted, callback: v => o.persen ? pct(v, 0) : rpS(v).replace('Rp', o.qty ? '' : 'Rp') } };
+          const kat = { stacked: !!o.stacked, grid: { display: false }, border: { color: axis },
+            ticks: { color: o.horizontal ? ink2 : muted, maxRotation: 0, autoSkip: !o.horizontal, autoSkipPadding: 14, padding: 6, font: { size: o.horizontal ? 12 : 11.5 } } };
+          const nilai = { stacked: !!o.stacked, beginAtZero: tipe === 'bar' || (!o.persen && !o.satuan), grid: { color: grid, drawTicks: false }, border: { display: false },
+            ticks: { color: muted, padding: 8, maxTicksLimit: 6, callback: v => o.persen ? pct(v, 0) : rpS(v).replace('Rp', o.qty ? '' : 'Rp') } };
           return o.horizontal ? { x: nilai, y: kat } : { x: kat, y: nilai };
         })()
       }
@@ -723,7 +864,7 @@
         const gm = groupBy(perS.get(s.kode), minggu);
         const tebal = !g.store || g.store === s.kode;
         return { label: s.kode, data: labels.map(w => { const r = gm.get(w); return r ? sum(r.map(x => x.total)) / sum(r.map(x => x.qty)) : null; }),
-          borderColor: W[s.kode], backgroundColor: W[s.kode], borderWidth: tebal ? 2.5 : 1.5, pointRadius: tebal ? 2 : 0, spanGaps: true };
+          borderColor: tebal ? W[s.kode] : alpha(W[s.kode], 0.45), backgroundColor: W[s.kode], borderWidth: tebal ? 2 : 1.5, spanGaps: true };
       });
       labels = labels.map(labelTgl);
       opt = { satuan: sat }; fmt = v => rp(v) + '/' + sat;
@@ -875,6 +1016,7 @@
   }
 
   /* ================= init ================= */
-  if (window.matchMedia) window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => st.data && renderTab());
   muat();
+  // font web selesai dimuat → gambar ulang supaya teks grafik (canvas) ikut pakai font yang sama
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => { if (st.data) render(); });
 })();
