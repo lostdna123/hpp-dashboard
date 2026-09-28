@@ -118,6 +118,17 @@
     const omzetBulan = {};
     omzet.forEach(r => { const k = r.store + '|' + r.bulan; omzetBulan[k] = (omzetBulan[k] || 0) + r.omzet; });
     const bulanList = [...new Set(omzet.map(r => r.bulan))].sort();
+    // rincian per orang / per pos (dipakai Apps Script untuk mengisi MASTER_KARYAWAN & BIAYA_TETAP)
+    const rincianKaryawan = [], rincianTetap = [];
+    stores.forEach(s => {
+      const staf = s.brand === 'Uri Gukbap' ? STAF['Uri Gukbap'] : s.brand === 'Baboy' ? STAF.Baboy : STAF.Bakmi;
+      const skala = s.kode === 'UG-02' ? 0.8 : 1;
+      staf.forEach(([jab, n, gaji]) => rincianKaryawan.push({ store: s.kode, jabatan: jab, orang: Math.max(1, Math.round(n * skala)), biaya: gaji }));
+      rincianTetap.push({ store: s.kode, kategori: 'Sewa tempat', jumlah: SEWA[s.kode] });
+      if (MALL[s.kode]) rincianTetap.push({ store: s.kode, kategori: 'Service charge / IPL', jumlah: MALL[s.kode] });
+      rincianTetap.push({ store: s.kode, kategori: 'Internet & telepon', jumlah: 650000 });
+      rincianTetap.push({ store: s.kode, kategori: 'Langganan POS / software', jumlah: 450000 });
+    });
     bulanList.forEach(bulan => {
       stores.forEach(s => {
         const add = (kelompok, kategori, jumlah) => biaya.push({ bulan, store: s.kode, kelompok, kategori, jumlah: Math.round(jumlah / 1000) * 1000 });
@@ -150,9 +161,9 @@
       batasFoodCost: 0.35,
       stores: stores.map(({ kode, brand, nama, aktif }) => ({ kode, brand, nama, aktif })),
       bahan: Object.keys(H).map(n => ({ nama: n, kategori: H[n][0], satuan: H[n][1], brand: 'Semua', acuan: 0 })),
-      belanja, omzet, biaya
+      belanja, omzet, biaya, rincianKaryawan, rincianTetap
     };
   }
 
   if (typeof module !== 'undefined' && module.exports) module.exports = { buatDemo }; else root.buatDemo = buatDemo;
-})(this);
+})(typeof globalThis !== 'undefined' ? globalThis : this);
