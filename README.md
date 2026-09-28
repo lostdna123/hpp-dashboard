@@ -21,7 +21,7 @@ food cost, biaya karyawan, rata-rata per struk, jumlah anomali (semua dibanding 
 | **Ringkasan** | Omzet per bulan per outlet · tren margin / food cost / karyawan · tabel performa outlet dengan status (✓ Sehat / ! Perlu perhatian / ▲ Kritis) · per brand · 4 hal yang perlu perhatian · Analisis AI · tren bulanan |
 | **Outlet** | Kartu tiap outlet → klik untuk detail: omzet harian, margin & food cost per bulan, laba rugi, tim per jabatan, 10 bahan terbesar, anomali outlet itu |
 | **Penjualan** | Omzet harian · rata-rata per hari dalam minggu · rata-rata per struk · tabel penjualan per outlet (hari terbaik) |
-| **Kas** | Saldo kas harian per cabang · posisi kas (saldo akhir, awal, omzet masuk, bahan, pembelian, gaji, sewa, tagihan, mutasi) · arus kas bersih per bulan · daftar saldo awal & mutasi manual |
+| **Cashflow** | Kas masuk vs keluar per bulan · laporan arus kas bulanan (saldo awal → kas masuk → kas keluar → arus bersih → saldo akhir) · cashflow per cabang · saldo kas harian · saldo awal & mutasi manual |
 | **Profit** | Margin per outlet per bulan · laba rugi per outlet (klik untuk rincian biaya) · biaya per pos |
 | **Belanja & Pembelian** | Belanja bahan per kategori · food cost per outlet · tabel bahan (harga vs periode sebelumnya) · pembelian non-bahan per kategori & sumber uang · riwayat belanja & pembelian lengkap (cari, catatan, link foto nota) |
 | **Anomali** | Semua temuan deteksi otomatis, bisa difilter per jenis, tiap kartu ada grafiknya |
@@ -59,7 +59,7 @@ perbaikan kecil, transport/parkir). Masuk sheet **INPUT_PEMBELIAN**, terpisah da
 menaikkan food cost**, tapi tetap mengurangi laba operasional ("Pembelian lain"). Tiap kiriman mencatat
 **Dibayar dari** (kas outlet tunai / uang pribadi-reimburse / transfer HO) sebagai dasar hitung kas bersih nanti.
 
-## Kas per cabang
+## Cashflow per cabang
 
 Sheet **SALDO_AWAL_KAS** berisi saldo awal tiap outlet (default **Rp100.000.000**, otomatis dibuat saat menu Setup)
 dan tanggal kas mulai dihitung. Sheet **MUTASI_KAS** untuk uang keluar/masuk yang bukan omzet atau belanja

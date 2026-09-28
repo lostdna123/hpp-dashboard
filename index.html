@@ -66,7 +66,7 @@
       <button role="tab" data-tab="outlet">Outlet</button>
       <button role="tab" data-tab="penjualan">Penjualan</button>
       <button role="tab" data-tab="profit">Profit</button>
-      <button role="tab" data-tab="kas">Kas</button>
+      <button role="tab" data-tab="kas">Cashflow</button>
       <button role="tab" data-tab="bahan">Belanja &amp; Pembelian</button>
       <button role="tab" data-tab="anomali">Anomali <span class="count" id="cntAnomali"></span></button>
     </nav>
@@ -181,25 +181,29 @@
       </div>
     </section>
 
-    <!-- ===== KAS ===== -->
+    <!-- ===== CASHFLOW ===== -->
     <section id="v-kas" class="view hidden">
       <div class="card hidden" id="kasKosong">
         <h2>Saldo awal kas belum diisi</h2>
-        <p class="hint">Jalankan menu <b>🍜 HPP › Setup</b> di Google Sheet: tiap outlet otomatis dapat saldo awal Rp100.000.000 di sheet <b>SALDO_AWAL_KAS</b>.</p>
+        <p class="hint">Jalankan menu <b>🍜 HPP › Setup</b> di Google Sheet: tiap cabang otomatis dapat saldo awal Rp100.000.000 di sheet <b>SALDO_AWAL_KAS</b>.</p>
       </div>
       <div class="card">
-        <div class="card-head"><h2>Saldo kas per cabang</h2><span class="hint" id="kasNote"></span></div>
-        <div class="chart-box"><canvas id="chKas" aria-label="Grafik saldo kas harian per outlet"></canvas></div>
+        <div class="card-head"><h2>Kas masuk vs kas keluar per bulan</h2><span class="hint" id="arusNote"></span></div>
+        <div class="chart-box"><canvas id="chArus" aria-label="Grafik kas masuk, kas keluar dan arus kas bersih per bulan"></canvas></div>
       </div>
       <div class="card">
-        <div class="card-head"><h2>Posisi kas per cabang</h2><span class="hint">periode sesuai filter · klik baris untuk detail outlet</span></div>
+        <div class="card-head"><h2>Laporan arus kas</h2><span class="hint">per bulan · cabang sesuai filter (pilih outlet di atas untuk laporan 1 cabang)</span></div>
+        <div class="table-wrap"><table id="tbArus" class="arus"></table></div>
+      </div>
+      <div class="card">
+        <div class="card-head"><h2>Cashflow per cabang</h2><span class="hint">periode sesuai filter · klik baris untuk detail outlet</span></div>
         <div class="table-wrap"><table id="tbKas"></table></div>
         <p class="hint kas-note" id="kasBerjalan"></p>
       </div>
       <div class="grid2">
         <div class="card">
-          <div class="card-head"><h2>Arus kas bersih per bulan</h2><span class="hint">omzet − semua pengeluaran, tanpa modal &amp; mutasi · * bulan berjalan: gaji, sewa &amp; tagihan belum dibayar</span></div>
-          <div class="chart-box short"><canvas id="chArusKas" aria-label="Grafik arus kas bersih per bulan"></canvas></div>
+          <div class="card-head"><h2>Saldo kas harian per cabang</h2><span class="hint">mulai Rp100 jt · turun tajam di akhir bulan = gaji, sewa &amp; tagihan dibayar</span></div>
+          <div class="chart-box short"><canvas id="chKas" aria-label="Grafik saldo kas harian per cabang"></canvas></div>
         </div>
         <div class="card">
           <div class="card-head"><h2>Saldo awal &amp; mutasi manual</h2><span class="hint">diisi HO di sheet SALDO_AWAL_KAS &amp; MUTASI_KAS (setoran ke HO, tambahan modal, koreksi)</span></div>

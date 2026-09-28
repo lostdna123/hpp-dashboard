@@ -321,3 +321,13 @@ dialog::backdrop{background:rgba(15,14,12,.45);backdrop-filter:blur(3px)}
 .kas-note{margin-top:12px;line-height:1.55}
 .kas-note b{color:var(--ink-2)}
 #kasKosong{border-style:dashed}
+/* laporan arus kas */
+table.arus td:first-child,table.arus th:first-child{position:sticky;left:0;background:var(--surface);z-index:1;min-width:230px}
+table.arus tr.grp td{padding-top:16px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);border-bottom:1px solid var(--line-2)}
+table.arus tr.subtot td{font-weight:700;background:var(--surface-2)}
+table.arus tr.saldo td{font-weight:700}
+table.arus tr.net td{font-weight:700;background:color-mix(in srgb,var(--accent) 8%,var(--surface));border-top:1px solid var(--line-2)}
+table.arus tr.subtot td:first-child{background:var(--surface-2)}
+table.arus td:last-child,table.arus th:last-child{border-left:1px solid var(--line-2);font-weight:700}
+table.arus tr.grp td{border-left:0;position:static}
+td.pos{color:var(--good)}
