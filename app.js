@@ -407,7 +407,7 @@
 
   /* ================= Analisis AI (hanya saat tombol diklik) ================= */
   const MAKS_ANOMALI_AI = 15;
-  const HARGA = { 'claude-haiku-4-5-20251001': [1, 5], 'claude-sonnet-5': [2, 10] }; // USD per 1 juta token (input, output)
+  const HARGA = { 'claude-haiku-4-5-20251001': [1, 5], 'claude-sonnet-5': [2, 10], 'claude-opus-5-5': [4, 20] }; // USD per 1 juta token (input, output)
 
   function ringkasanAI() {
     const sc = st.scope, D = st.data, a = agregat(sc, sc.dari, sc.sampai);

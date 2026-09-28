@@ -34,7 +34,7 @@ tanpa memanggil AI lagi.
 - API key Claude disimpan di **Script Properties** Apps Script (menu **🍜 HPP › Set API key Claude**),
   tidak pernah ada di halaman ini atau di GitHub.
 - Pengaman biaya: maks. 30 analisis per hari (ubah `AI_MAKS_PER_HARI` di Code.gs).
-- Model: Haiku 4.5 (default, paling hemat) atau Sonnet 5 (lebih tajam).
+- Model: Haiku 4.5 (default, paling hemat, ±$0,006/analisis), Sonnet 5 (lebih tajam, ±$0,012) atau Opus 5.5 (paling dalam, ±$0,024).
 
 ## File
 
