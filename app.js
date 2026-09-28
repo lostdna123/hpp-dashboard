@@ -1444,12 +1444,14 @@
     D.stores.forEach(s => { const t = targetOf(s.kode); L.push('- ' + s.kode + ' | ' + s.brand + ' | ' + s.nama + (t ? ' | target omzet/bln ' + j(t.omzet) + ', batas food cost ' + p1(t.fc) + ', target margin ' + p1(t.margin) : ' | target belum diisi')); });
 
     L.push('', '## Kinerja bulanan per outlet (bulan berjalan belum penuh; gaji & biaya tetap bulan berjalan diprorata sesuai hari)');
-    L.push('bulan | outlet | omzet | struk | per_struk_rb | bahan | food_cost | karyawan | biaya_tetap | tagihan | pembelian_lain | laba_op | margin | prime_cost | kas_akhir');
+    L.push('Untuk membandingkan bulan berjalan dengan bulan lain, pakai omzet_per_hari (omzet ÷ hari_data), jangan total omzet.');
+    L.push('bulan | outlet | hari_data | omzet | omzet_per_hari | struk | per_struk_rb | bahan | food_cost | karyawan | biaya_tetap | tagihan | pembelian_lain | laba_op | margin | prime_cost | kas_akhir');
     bl.forEach(b => D.stores.forEach(s => {
       const f = k => k === s.kode, a = agregat(f, b, b), p = hitungPL(f, b, b);
       if (!a.omz && !a.bel) return;
       const bk = adaKas() ? bukuKas(s.kode) : null, kas = bk && bk.mulai ? bk.saldo(batasHariIni(akhirBulan(b))) : null;
-      L.push([b, s.kode, j(a.omz), a.struk || '-', a.ticket ? Math.round(a.ticket / 1000) : '-', j(a.bel), p1(a.fc), p.adaBiaya ? j(p.kary) : '-', p.adaBiaya ? j(p.tetap) : '-',
+      const hr = new Set(a.O.map(r => r.tgl)).size;
+      L.push([b, s.kode, hr, j(a.omz), hr ? j(a.omz / hr) : '-', a.struk || '-', a.ticket ? Math.round(a.ticket / 1000) : '-', j(a.bel), p1(a.fc), p.adaBiaya ? j(p.kary) : '-', p.adaBiaya ? j(p.tetap) : '-',
         j(p.ops), j(p.pemb), p.adaBiaya ? j(p.laba) : '-', p.adaBiaya ? p1(p.margin) : '-', p1(p.prime), kas == null ? '-' : j(kas)].join(' | '));
     }));
 
