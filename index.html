@@ -308,6 +308,38 @@
   </div>
 </dialog>
 
+<!-- ===== TANYA AI (chat) ===== -->
+<button class="chat-fab" id="chatFab" aria-controls="chatPanel" aria-expanded="false">
+  <svg class="i" viewBox="0 0 24 24"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z"/><path d="M8.5 11h.01M12 11h.01M15.5 11h.01"/></svg><span>Tanya AI</span>
+</button>
+<aside class="chat hidden" id="chatPanel" role="dialog" aria-label="Tanya AI" aria-modal="false">
+  <header class="chat-head">
+    <div class="chat-title">
+      <span class="spark-ic" aria-hidden="true"><svg class="i" viewBox="0 0 24 24"><path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z"/></svg></span>
+      <div><h2>Tanya AI</h2><p class="hint" id="chatSub">Jawaban dari data dashboard · 6 bulan terakhir</p></div>
+    </div>
+    <div class="chat-acts">
+      <button class="btn ghost small" id="chatBaru" title="Mulai percakapan baru">Baru</button>
+      <button class="btn ghost icon" id="chatTutup" aria-label="Tutup"><svg class="i" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
+    </div>
+  </header>
+  <div class="chat-log" id="chatLog" aria-live="polite"></div>
+  <footer class="chat-foot">
+    <div class="chat-input">
+      <textarea id="chatInput" rows="1" placeholder="Tanya soal omzet, margin, cashflow, bahan…" aria-label="Pertanyaan"></textarea>
+      <button class="btn primary icon" id="chatKirim" aria-label="Kirim"><svg class="i" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></svg></button>
+    </div>
+    <div class="chat-meta">
+      <select id="chatModel" aria-label="Model AI">
+        <option value="claude-haiku-4-5-20251001">Hemat · Haiku 4.5</option>
+        <option value="claude-sonnet-5">Lebih tajam · Sonnet 5</option>
+        <option value="claude-opus-5-5">Paling dalam · Opus 5.5</option>
+      </select>
+      <span class="hint" id="chatInfo"></span>
+    </div>
+  </footer>
+</aside>
+
 <div id="toast" class="toast hidden" role="status"></div>
 </body>
 </html>

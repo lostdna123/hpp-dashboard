@@ -67,6 +67,15 @@ perbaikan kecil, transport/parkir). Masuk sheet **INPUT_PEMBELIAN**, terpisah da
 menaikkan food cost**, tapi tetap mengurangi laba operasional ("Pembelian lain"). Tiap kiriman mencatat
 **Dibayar dari** (kas outlet tunai / uang pribadi-reimburse / transfer HO) sebagai dasar hitung kas bersih nanti.
 
+## Tanya AI (chat)
+
+Tombol **Tanya AI** di pojok kanan bawah membuka chat. Tiap pertanyaan mengirim ringkasan data 6 bulan terakhir
+(kinerja bulanan per outlet, cashflow, belanja per kategori, 20 bahan terbesar & harganya, omzet harian 14 hari,
+pola hari, tim per jabatan, biaya, titik impas, status input, anomali) ± 7.000 token + riwayat percakapan, lewat
+Apps Script ke Claude. Ringkasan ditandai *prompt cache*, jadi pertanyaan lanjutan dalam ±5 menit jauh lebih murah
+(±$0,01 pertanyaan pertama dengan Haiku, ±$0,002 lanjutan). Maks. 150 pertanyaan/hari (`CHAT_MAKS_PER_HARI`).
+Nama karyawan & gaji per orang tidak pernah dikirim. Riwayat chat hanya disimpan di browser.
+
 ## Cashflow per cabang
 
 Sheet **SALDO_AWAL_KAS** berisi saldo awal tiap outlet (default **Rp100.000.000**, otomatis dibuat saat menu Setup)

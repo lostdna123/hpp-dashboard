@@ -1425,6 +1425,190 @@
     return out.join('');
   }
 
+  /* ================= Tanya AI (chat) =================
+     Tiap pertanyaan mengirim ringkasan data (konteks) + riwayat singkat ke Apps Script → Claude.
+     Konteks sama persis antar pertanyaan (selama data & filter tidak berubah) → kena prompt cache → lanjutan lebih murah. */
+  function konteksChat() {
+    const D = st.data, sc = st.scope, bulanIni = today().slice(0, 7), bl = monthsBetween(shiftMonth(bulanIni, -5), bulanIni);
+    const j = n => n == null || !isFinite(n) ? '-' : (n / 1e6).toFixed(1);
+    const p1 = x => x == null || !isFinite(x) ? '-' : (x * 100).toFixed(1) + '%';
+    const rpB = n => 'Rp' + Math.round(n).toLocaleString('id-ID');
+    const kodes = D.stores.map(s => s.kode), L = [];
+    const terakhir = (arr, k) => arr.reduce((m, r) => r.store === k && r.tgl > m ? r.tgl : m, '');
+    const lastAll = D.omzet.reduce((m, r) => r.tgl > m ? r.tgl : m, '');
+    L.push('Hari ini ' + today() + ' (' + HARI_PANJANG[hariKe(today())] + '). Bulan berjalan ' + bulanIni + ', omzet terakhir tercatat ' + (lastAll || '-') + '.');
+    L.push('Owner sedang melihat dashboard dengan filter: periode ' + sc.dari + ' s/d ' + sc.sampai + ', ' + (sc.store ? 'outlet ' + sc.store : sc.brand ? 'brand ' + sc.brand : 'semua outlet') + '. Kalau owner bilang "outlet ini"/"periode ini", pakai filter itu.');
+    L.push('Satuan uang: juta Rupiah (jt) kecuali ditulis "Rp". Batas food cost umum ' + p1(D.batasFoodCost || 0.35) + '.');
+
+    L.push('', '## Outlet');
+    D.stores.forEach(s => { const t = targetOf(s.kode); L.push('- ' + s.kode + ' | ' + s.brand + ' | ' + s.nama + (t ? ' | target omzet/bln ' + j(t.omzet) + ', batas food cost ' + p1(t.fc) + ', target margin ' + p1(t.margin) : ' | target belum diisi')); });
+
+    L.push('', '## Kinerja bulanan per outlet (bulan berjalan belum penuh; gaji & biaya tetap bulan berjalan diprorata sesuai hari)');
+    L.push('bulan | outlet | omzet | struk | per_struk_rb | bahan | food_cost | karyawan | biaya_tetap | tagihan | pembelian_lain | laba_op | margin | prime_cost | kas_akhir');
+    bl.forEach(b => D.stores.forEach(s => {
+      const f = k => k === s.kode, a = agregat(f, b, b), p = hitungPL(f, b, b);
+      if (!a.omz && !a.bel) return;
+      const bk = adaKas() ? bukuKas(s.kode) : null, kas = bk && bk.mulai ? bk.saldo(batasHariIni(akhirBulan(b))) : null;
+      L.push([b, s.kode, j(a.omz), a.struk || '-', a.ticket ? Math.round(a.ticket / 1000) : '-', j(a.bel), p1(a.fc), p.adaBiaya ? j(p.kary) : '-', p.adaBiaya ? j(p.tetap) : '-',
+        j(p.ops), j(p.pemb), p.adaBiaya ? j(p.laba) : '-', p.adaBiaya ? p1(p.margin) : '-', p1(p.prime), kas == null ? '-' : j(kas)].join(' | '));
+    }));
+
+    if (adaKas()) {
+      L.push('', '## Cashflow bulanan semua cabang (basis kas)');
+      L.push('bulan | saldo_awal | kas_masuk | bahan | pembelian | gaji | biaya_tetap | tagihan | mutasi_bersih | arus_bersih | saldo_akhir | belum_dibayar');
+      bl.forEach(b => { const r = arusBulan(kodes, b); L.push([b, j(r.awal), j(r.masuk), j(r.bahan), j(r.pembelian), j(r.gaji), j(r.tetap), j(r.tagihan), j(r.masukLain - r.keluarLain), j(r.bersih), j(r.akhir), j(r.tertunda)].join(' | ')); });
+      L.push('Saldo awal kas: ' + D.kasAwal.map(x => x.store + ' ' + j(x.jumlah) + ' mulai ' + x.tgl).join('; ') + '.');
+      L.push('Gaji, sewa & tagihan bulan ini yang belum dibayar per outlet: ' + kodes.map(k => k + ' ' + j(bukuKas(k).tertunda)).join('; ') + '.');
+      if ((D.mutasiKas || []).length) L.push('Mutasi kas manual: ' + D.mutasiKas.slice(-20).map(m => m.tgl + ' ' + m.store + ' ' + m.jenis + ' ' + j(m.jumlah) + (m.ket ? ' (' + m.ket + ')' : '')).join('; ') + '.');
+    }
+
+    L.push('', '## Belanja bahan per kategori per outlet per bulan (jt)');
+    bl.forEach(b => D.stores.forEach(s => {
+      const rs = D.belanja.filter(r => r.store === s.kode && r.bulan === b);
+      if (rs.length) L.push(b + ' ' + s.kode + ': ' + [...groupBy(rs, r => r.kategori).entries()].map(([k, x]) => k + ' ' + j(sum(x.map(y => y.total)))).join(', '));
+    }));
+
+    const B6 = D.belanja.filter(r => r.bulan >= bl[0]);
+    const top = [...groupBy(B6, r => r.bahan).entries()].map(([k, rs]) => [k, rs, sum(rs.map(r => r.total))]).sort((a, b) => b[2] - a[2]).slice(0, 20);
+    L.push('', '## 20 bahan terbesar: harga rata-rata per satuan & qty per bulan (semua outlet)');
+    top.forEach(([k, rs, t]) => {
+      L.push('- ' + k + ' (' + rs[0].satuan + ', total ' + j(t) + '): ' + bl.map(b => {
+        const x = rs.filter(r => r.bulan === b), q = sum(x.map(r => r.qty));
+        return x.length && q ? b.slice(5) + ' ' + rpB(sum(x.map(r => r.total)) / q) + ' x' + num(q) : null;
+      }).filter(Boolean).join('; '));
+    });
+    const b3 = shiftMonth(bulanIni, -2);
+    L.push('', '## Harga rata-rata per outlet ' + b3 + ' s/d ' + bulanIni + ' (per satuan)');
+    top.slice(0, 12).forEach(([k, rs]) => {
+      const x = rs.filter(r => r.bulan >= b3);
+      if (x.length) L.push('- ' + k + ': ' + [...groupBy(x, r => r.store).entries()].map(([sk, y]) => sk + ' ' + rpB(sum(y.map(r => r.total)) / sum(y.map(r => r.qty)))).join(', '));
+    });
+
+    const t14 = geserHari(today(), -15);
+    L.push('', '## Omzet harian 14 hari terakhir (jt)');
+    D.stores.forEach(s => {
+      const rs = D.omzet.filter(r => r.store === s.kode && r.tgl > t14).sort((a, b) => a.tgl < b.tgl ? -1 : 1);
+      if (rs.length) L.push(s.kode + ': ' + rs.map(r => r.tgl.slice(5) + ' ' + NAMA_HARI[hariKe(r.tgl)] + ' ' + j(r.omzet)).join(', '));
+    });
+    const t56 = geserHari(today(), -57), urutH = [1, 2, 3, 4, 5, 6, 0];
+    L.push('', '## Rata-rata omzet per hari dalam minggu, 8 minggu terakhir (jt)');
+    D.stores.forEach(s => {
+      const per = [0, 1, 2, 3, 4, 5, 6].map(() => []);
+      D.omzet.forEach(r => { if (r.store === s.kode && r.tgl > t56) per[hariKe(r.tgl)].push(r.omzet); });
+      if (per.some(x => x.length)) L.push(s.kode + ': ' + urutH.map(h => NAMA_HARI[h] + ' ' + (per[h].length ? j(sum(per[h]) / per[h].length) : '-')).join(', '));
+    });
+
+    const bKary = (D.biaya || []).some(r => r.bulan === bulanIni && r.kelompok === 'Karyawan') ? bulanIni : shiftMonth(bulanIni, -1);
+    L.push('', '## Tim per outlet (' + bKary + ', biaya per bulan penuh, jt)');
+    D.stores.forEach(s => {
+      const rs = (D.biaya || []).filter(r => r.store === s.kode && r.kelompok === 'Karyawan' && r.bulan === bKary);
+      if (rs.length) L.push(s.kode + ': ' + rs.map(r => r.kategori + ' ' + (r.orang || '?') + ' org ' + j(r.jumlah)).join(', '));
+    });
+    const bLalu = shiftMonth(bulanIni, -1);
+    L.push('', '## Rincian biaya tetap & tagihan per outlet (' + bLalu + ', jt)');
+    D.stores.forEach(s => {
+      const rs = (D.biaya || []).filter(r => r.store === s.kode && r.bulan === bLalu && r.kelompok !== 'Karyawan');
+      if (rs.length) L.push(s.kode + ': ' + rs.map(r => r.kategori + ' ' + j(r.jumlah)).join(', '));
+    });
+
+    const P6 = (D.pembelian || []).filter(r => r.bulan >= bl[0]);
+    if (P6.length) {
+      L.push('', '## Pembelian non-bahan ' + bl[0] + ' s/d ' + bulanIni + ' (jt)');
+      D.stores.forEach(s => { const x = P6.filter(r => r.store === s.kode); if (x.length) L.push(s.kode + ': ' + [...groupBy(x, r => r.kategori).entries()].map(([k, y]) => k + ' ' + j(sum(y.map(r => r.total)))).join(', ')); });
+      L.push('Sumber uang pembelian: ' + [...groupBy(P6, r => r.dibayarDari || '-').entries()].map(([k, y]) => k + ' ' + j(sum(y.map(r => r.total)))).join(', ') + '.');
+    }
+
+    L.push('', '## Titik impas per outlet (periode filter ' + sc.dari + ' s/d ' + sc.sampai + ')');
+    D.stores.forEach(s => { const t = titikImpas(k => k === s.kode, sc); if (t) L.push(s.kode + ': omzet/hari ' + j(t.omzHari) + ', impas/hari ' + j(t.impasHari) + ', jarak aman ' + p1(t.jarak) + ', biaya variabel ' + p1(t.rasioVar)); });
+
+    L.push('', '## Status input data');
+    D.stores.forEach(s => L.push(s.kode + ': omzet terakhir ' + (terakhir(D.omzet, s.kode) || '-') + ', belanja terakhir ' + (terakhir(D.belanja, s.kode) || '-')));
+
+    L.push('', '## Anomali terdeteksi otomatis (periode filter, urut level & dampak, maks 20)');
+    if (!st.anomali.length) L.push('- tidak ada');
+    st.anomali.slice(0, 20).forEach(a => L.push('- [' + a.level + '] ' + a.judul + ' — ' + a.detail + (a.dampak ? ' (dampak ±' + j(a.dampak) + ' jt)' : '')));
+    return L.join('\n');
+  }
+
+  const K_CHAT = 'hppdash.chat', K_CHAT_MODEL = 'hppdash.chatModel';
+  st.chat = load(K_CHAT, []);
+  const SARAN = [
+    'Outlet mana yang paling untung dan paling lemah bulan ini? Kenapa?',
+    'Kenapa food cost naik dibanding bulan lalu?',
+    'Kas tiap cabang cukup nggak buat bayar gaji & sewa akhir bulan ini?',
+    'Bahan apa yang harganya naik paling tinggi 3 bulan terakhir?',
+    'Hari apa paling ramai? Outlet mana yang perlu tambah staf di weekend?',
+    'Kalau omzet BB-01 turun 20%, masih untung nggak?'
+  ];
+  const NAMA_MODEL = { 'claude-haiku-4-5-20251001': 'Haiku 4.5', 'claude-sonnet-5': 'Sonnet 5', 'claude-opus-5-5': 'Opus 5.5' };
+  { const m = load(K_CHAT_MODEL, ''); if (m && NAMA_MODEL[m]) $('#chatModel').value = m; }
+  $('#chatModel').addEventListener('change', () => { save(K_CHAT_MODEL, $('#chatModel').value); infoChat(); });
+
+  function infoChat() {
+    const el = $('#chatInfo');
+    if (!st.data) { el.textContent = ''; return; }
+    if (st.data.demo) { el.textContent = 'Mode demo: sambungkan ke Google Sheet (Pengaturan) untuk memakai chat.'; return; }
+    const tok = Math.round(konteksChat().length / 3.2) + 1400, h = HARGA[$('#chatModel').value] || [1, 5];
+    el.textContent = '±' + tok.toLocaleString('id-ID') + ' token data · ±$' + ((tok * h[0] + 500 * h[1]) / 1e6).toFixed(3) + ' pertanyaan pertama, lanjutan lebih murah';
+  }
+  function renderChat() {
+    const log = $('#chatLog'), demo = !st.data || st.data.demo;
+    let html = '';
+    if (!st.chat.length) {
+      html = '<div class="chat-kosong"><h3>Mau tahu apa soal bisnis lo?</h3><p>AI membaca ringkasan data 6 bulan terakhir (omzet, laba, cashflow, bahan, tim, anomali) lalu menjawab dari angka itu.</p>' +
+        '<div class="saran">' + SARAN.map(q => '<button type="button" data-q="' + esc(q) + '">' + esc(q) + '</button>').join('') + '</div></div>';
+    } else {
+      html = st.chat.map(m => m.role === 'user' ? '<div class="msg-u">' + esc(m.content) + '</div>'
+        : '<div class="msg-a">' + mdLite(m.content) + (m.meta ? '<div class="msg-meta">' + esc(m.meta) + '</div>' : '') + '</div>').join('');
+    }
+    if (st.chatSibuk) html += '<div class="typing" aria-label="AI sedang menjawab"><i></i><i></i><i></i></div>';
+    if (st.chatErr) html += '<div class="msg-err"><span>' + esc(st.chatErr) + '</span><button type="button" class="btn outline small" id="chatUlang">Coba lagi</button></div>';
+    log.innerHTML = html;
+    log.querySelectorAll('.saran button').forEach(b => b.addEventListener('click', () => kirimChat(b.dataset.q)));
+    const ul = $('#chatUlang'); if (ul) ul.addEventListener('click', ulangChat);
+    log.scrollTop = log.scrollHeight;
+    $('#chatInput').disabled = demo || !!st.chatSibuk;
+    $('#chatKirim').disabled = demo || !!st.chatSibuk;
+    $('#chatInput').placeholder = demo ? 'Chat butuh koneksi ke Google Sheet' : 'Tanya soal omzet, margin, cashflow, bahan…';
+    infoChat();
+  }
+  function bukaChat() {
+    $('#chatPanel').classList.remove('hidden'); $('#chatFab').setAttribute('aria-expanded', 'true');
+    renderChat(); setTimeout(() => $('#chatInput').focus(), 50);
+  }
+  function tutupChat() { $('#chatPanel').classList.add('hidden'); $('#chatFab').setAttribute('aria-expanded', 'false'); $('#chatFab').focus(); }
+  async function kirimChat(teks) {
+    teks = String(teks || '').trim();
+    if (!teks || st.chatSibuk) return;
+    if (!st.data || st.data.demo) { toast('Chat AI butuh koneksi ke Google Sheet (menu Pengaturan).'); return; }
+    st.chat.push({ role: 'user', content: teks }); st.chatErr = null; st.chatSibuk = true;
+    $('#chatInput').value = ''; ukurInput(); renderChat();
+    try {
+      const out = await api({ api: 'chat', model: $('#chatModel').value, konteks: konteksChat(), messages: st.chat.slice(-16).map(m => ({ role: m.role, content: m.content })) }, 3); // tanpa coba-ulang: jangan tertagih dua kali
+      const u = out.usage || {}, h = HARGA[out.model] || [1, 5];
+      const usd = ((u.input_tokens || 0) * h[0] + (u.cache_creation_input_tokens || 0) * h[0] * 1.25 + (u.cache_read_input_tokens || 0) * h[0] * 0.1 + (u.output_tokens || 0) * h[1]) / 1e6;
+      st.chat.push({ role: 'assistant', content: out.teks || '(jawaban kosong)',
+        meta: (NAMA_MODEL[out.model] || out.model) + ' · ±$' + usd.toFixed(3) + (u.cache_read_input_tokens ? ' · data dari cache' : '') + (out.sisaHariIni != null ? ' · sisa ' + out.sisaHariIni + ' pertanyaan hari ini' : '') });
+    } catch (e) { st.chatErr = e.message; }
+    st.chatSibuk = false;
+    st.chat = st.chat.slice(-30); save(K_CHAT, st.chat);
+    renderChat();
+    if (!st.chatErr) $('#chatInput').focus();
+  }
+  function ulangChat() {
+    const last = st.chat[st.chat.length - 1];
+    if (!last || last.role !== 'user') return;
+    st.chat.pop(); st.chatErr = null; kirimChat(last.content);
+  }
+  function ukurInput() { const t = $('#chatInput'); t.style.height = 'auto'; t.style.height = Math.min(140, t.scrollHeight) + 'px'; }
+  $('#chatFab').addEventListener('click', bukaChat);
+  $('#chatTutup').addEventListener('click', tutupChat);
+  $('#chatBaru').addEventListener('click', () => { st.chat = []; st.chatErr = null; save(K_CHAT, st.chat); renderChat(); $('#chatInput').focus(); });
+  $('#chatKirim').addEventListener('click', () => kirimChat($('#chatInput').value));
+  $('#chatInput').addEventListener('input', ukurInput);
+  $('#chatInput').addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); kirimChat($('#chatInput').value); } });
+  $('#chatPanel').addEventListener('keydown', e => { if (e.key === 'Escape') tutupChat(); });
+
   /* ================= init ================= */
   muat();
   document.addEventListener('visibilitychange', () => {

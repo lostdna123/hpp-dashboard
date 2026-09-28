@@ -159,6 +159,7 @@ function doPost(e) {
     }
     if (body.api === 'data') return json_(Object.assign({ ok: true }, dataDashboard_()));
     if (body.api === 'ai') return json_(Object.assign({ ok: true }, analisisAI_(body)));
+    if (body.api === 'chat') return json_(Object.assign({ ok: true }, chatAI_(body)));
     throw new Error('API tidak dikenal.');
   } catch (err) {
     return json_({ ok: false, error: String((err && err.message) || err).replace('[VALIDASI] ', '') });
@@ -263,6 +264,79 @@ function analisisAI_(body) {
     model: model,
     usage: out.usage || {},
     sisaHariIni: AI_MAKS_PER_HARI - n - 1
+  };
+}
+
+/* ============================================================
+ *  CHAT "Tanya AI" di dashboard
+ *  Dashboard mengirim ringkasan data (konteks) + riwayat percakapan. Konteks ditandai cache_control
+ *  supaya pertanyaan lanjutan dalam ±5 menit jauh lebih murah (prompt caching).
+ * ============================================================ */
+const CHAT_MAKS_PER_HARI = 150;     // pengaman biaya chat per hari (terpisah dari Analisis AI)
+const CHAT_MAKS_KONTEKS = 60000;    // karakter ringkasan data maksimum
+const CHAT_MAKS_PESAN = 16;         // riwayat terakhir yang ikut dikirim
+
+function chatAI_(body) {
+  const apiKey = prop_('ANTHROPIC_API_KEY');
+  if (!apiKey) throw new Error('API key Claude belum di-set. Di Google Sheet: menu 🍜 HPP > Set API key Claude.');
+  const props = PropertiesService.getScriptProperties();
+  const hari = fmt_(new Date(), 'yyyy-MM-dd');
+  const hitung = JSON.parse(props.getProperty('CHAT_HITUNG') || '{}');
+  const n = hitung.hari === hari ? hitung.n : 0;
+  if (n >= CHAT_MAKS_PER_HARI) throw new Error('Batas ' + CHAT_MAKS_PER_HARI + ' pertanyaan chat per hari sudah tercapai. Coba lagi besok.');
+
+  const model = AI_MODEL_DIIZINKAN.indexOf(body.model) > -1 ? body.model : AI_MODEL_DIIZINKAN[0];
+  const konteks = String(body.konteks || '').slice(0, CHAT_MAKS_KONTEKS);
+  if (!konteks) throw new Error('Data dashboard kosong.');
+
+  // rapikan riwayat: mulai dari user, peran bergantian, teks dibatasi
+  const pesan = [];
+  (Array.isArray(body.messages) ? body.messages : []).slice(-CHAT_MAKS_PESAN).forEach(m => {
+    const role = m && m.role === 'assistant' ? 'assistant' : 'user';
+    const content = String((m && m.content) || '').slice(0, 3000).trim();
+    if (!content) return;
+    if (!pesan.length && role !== 'user') return;
+    if (pesan.length && pesan[pesan.length - 1].role === role) pesan[pesan.length - 1].content += '\n\n' + content;
+    else pesan.push({ role: role, content: content });
+  });
+  if (!pesan.length || pesan[pesan.length - 1].role !== 'user') throw new Error('Pertanyaan kosong.');
+
+  const aturan = [
+    'Kamu asisten analis bisnis untuk owner grup restoran di Indonesia (4 brand: Uri Gukbap, Bakmi Awei 88, Baboy, Bakmi Dua Wajah; menu berbahan utama babi).',
+    'Jawab pertanyaan owner HANYA berdasarkan DATA BISNIS di bawah. Jangan mengarang angka. Kalau datanya tidak ada atau tidak cukup, bilang terus terang dan sebutkan data apa yang perlu diisi di Google Sheet.',
+    'Gaya: Bahasa Indonesia santai-profesional, langsung ke jawaban. Kalimat pertama = jawabannya. Sertakan angka kunci dengan satuan (Rp jt, %, hari) dan sebut periode/outletnya.',
+    'Kalau menghitung, tunjukkan hitungannya singkat (1 baris). Pakai poin-poin kalau lebih dari 2 hal. Maksimal ±200 kata kecuali diminta rinci.',
+    'Boleh memberi saran berdasarkan praktik umum FnB, tapi tandai sebagai saran dan kaitkan dengan angka di data.',
+    'Definisi: food cost = belanja bahan ÷ omzet (berbasis pembelian, bukan pemakaian). Prime cost = (bahan + karyawan) ÷ omzet, patokan ≤ 65%. Laba operasional = omzet − bahan − karyawan − biaya tetap − tagihan bulanan − pembelian non-bahan. Margin = laba operasional ÷ omzet.',
+    'Kas/cashflow basis kas: saldo awal + omzet − bahan − pembelian − gaji − biaya tetap − tagihan ± mutasi; gaji, sewa & tagihan dianggap dibayar di akhir bulan (bulan berjalan belum dipotong). Bulan berjalan belum selesai, jadi bandingkan secara setara (per hari atau tanggal yang sama).',
+    'Jangan menyebut nama karyawan (data hanya per jabatan).'
+  ].join('\n');
+
+  const res = UrlFetchApp.fetch('https://api.anthropic.com/v1/messages', {
+    method: 'post',
+    contentType: 'application/json',
+    headers: { 'x-api-key': apiKey, 'anthropic-version': '2023-06-01' },
+    payload: JSON.stringify({
+      model: model,
+      max_tokens: 1200,
+      system: [
+        { type: 'text', text: aturan },
+        { type: 'text', text: 'DATA BISNIS:\n' + konteks, cache_control: { type: 'ephemeral' } }
+      ],
+      messages: pesan
+    }),
+    muteHttpExceptions: true
+  });
+  const out = JSON.parse(res.getContentText() || '{}');
+  if (res.getResponseCode() !== 200) {
+    throw new Error('Claude API error ' + res.getResponseCode() + ': ' + ((out.error && out.error.message) || res.getContentText().slice(0, 200)));
+  }
+  props.setProperty('CHAT_HITUNG', JSON.stringify({ hari: hari, n: n + 1 }));
+  return {
+    teks: (out.content || []).filter(c => c.type === 'text').map(c => c.text).join('\n'),
+    model: model,
+    usage: out.usage || {},
+    sisaHariIni: CHAT_MAKS_PER_HARI - n - 1
   };
 }
 
