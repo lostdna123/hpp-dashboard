@@ -76,6 +76,8 @@
       omzet: raw.omzet.map(r => ({ tgl: r[0], bulan: r[1], brand: r[2], store: r[3], omzet: r[4], struk: r[5] })),
       pembelian: (raw.pembelian || []).map(r => ({ tgl: r[0], bulan: r[1], brand: r[2], store: r[3], pic: r[4], kategori: r[5], barang: r[6], qty: r[7], satuan: r[8],
         harga: r[9], total: r[10], dibayarDari: r[11], toko: r[12], catatan: r[13] || '', foto: r[14] || '', id: r[15] })),
+      kasAwal: (raw.kasAwal || []).map(r => ({ store: r[0], tgl: r[1], jumlah: Number(r[2]) || 0 })),
+      mutasiKas: (raw.mutasiKas || []).map(r => ({ tgl: r[0], store: r[1], jenis: r[2], ket: r[3], jumlah: Number(r[4]) || 0 })),
       biaya: (raw.biaya || []).map(r => ({ bulan: r[0], store: r[1], kelompok: r[2], kategori: r[3], jumlah: Number(r[4]) || 0, orang: Number(r[5]) || 0 }))
     };
   }
@@ -222,6 +224,45 @@
   const plScope = (sc, dari, sampai) => hitungPL(s => inStore(sc, s), dari, sampai);
   const plOutlet = (kode, dari, sampai) => hitungPL(s => s === kode, dari, sampai);
 
+  /* ================= kas per outlet =================
+     Saldo = saldo awal + omzet − belanja bahan − pembelian lain − gaji − biaya tetap − tagihan ± mutasi manual.
+     Gaji, biaya tetap & tagihan bulanan dianggap dibayar di hari terakhir bulan itu (bulan berjalan: belum). */
+  const akhirBulan = b => b + '-' + pad(Anomali.daysInMonth(b));
+  const arahMutasi = j => /keluar/i.test(j) ? -1 : /masuk/i.test(j) ? 1 : 0;
+  function bukuKas(kode) {
+    const D = st.data;
+    st.kasCache = st.kasCache && st.kasCache.data === D ? st.kasCache : { data: D, per: {} };
+    if (st.kasCache.per[kode]) return st.kasCache.per[kode];
+    const awal = (D.kasAwal || []).find(x => x.store === kode);
+    const mulai = awal ? awal.tgl : null, bulanIni = today().slice(0, 7), ev = [];
+    if (mulai) {
+      ev.push({ tgl: mulai, jenis: 'modal', v: awal.jumlah });
+      const ok = t => t >= mulai;
+      D.omzet.forEach(r => { if (r.store === kode && ok(r.tgl)) ev.push({ tgl: r.tgl, jenis: 'omzet', v: r.omzet }); });
+      D.belanja.forEach(r => { if (r.store === kode && ok(r.tgl)) ev.push({ tgl: r.tgl, jenis: 'bahan', v: -r.total }); });
+      (D.pembelian || []).forEach(r => { if (r.store === kode && ok(r.tgl)) ev.push({ tgl: r.tgl, jenis: 'pembelian', v: -r.total }); });
+      const J = { Karyawan: 'gaji', Tetap: 'tetap', Operasional: 'tagihan' };
+      (D.biaya || []).forEach(r => { if (r.store === kode && r.bulan < bulanIni && ok(akhirBulan(r.bulan))) ev.push({ tgl: akhirBulan(r.bulan), jenis: J[r.kelompok] || 'tagihan', v: -r.jumlah }); });
+      (D.mutasiKas || []).forEach(r => {
+        if (r.store !== kode || !ok(r.tgl)) return;
+        const a = arahMutasi(r.jenis);
+        ev.push({ tgl: r.tgl, jenis: 'mutasi', v: a ? a * Math.abs(r.jumlah) : r.jumlah });
+      });
+    }
+    ev.sort((x, y) => x.tgl < y.tgl ? -1 : x.tgl > y.tgl ? 1 : 0);
+    let c = 0; const cum = ev.map(e => (c += e.v));
+    const out = { mulai, ev, cum,
+      saldo: t => { let lo = 0, hi = ev.length - 1, ans = -1; while (lo <= hi) { const m = (lo + hi) >> 1; if (ev[m].tgl <= t) { ans = m; lo = m + 1; } else hi = m - 1; } return ans < 0 ? 0 : cum[ans]; },
+      // biaya bulan berjalan yang belum dibayar (perkiraan penuh sebulan)
+      tertunda: sum((D.biaya || []).filter(r => r.store === kode && r.bulan === bulanIni).map(r => r.jumlah)) };
+    st.kasCache.per[kode] = out;
+    return out;
+  }
+  const hariSebelum = t => { const d = new Date(t + 'T00:00:00Z'); d.setUTCDate(d.getUTCDate() - 1); return d.toISOString().slice(0, 10); };
+  const batasHariIni = t => t > today() ? today() : t;
+  const saldoScope = (sc, t) => sum(sc.storeList.map(k => bukuKas(k).saldo(t)));
+  const adaKas = () => (st.data.kasAwal || []).length > 0;
+
   function statusOutlet(p, nAnomaliTinggi) {
     const batas = st.data.batasFoodCost || 0.35;
     if (!p.omz) return { cls: 'perhatian', ikon: '!', label: 'Belum ada omzet' };
@@ -288,8 +329,14 @@
       kpi('Food cost', pct(a.fc), d(poinHtml(a.fc != null && aP.fc != null ? a.fc - aP.fc : null, false)), { tab: 'bahan', cls: a.fc > batas ? 'over' : '', title: 'Belanja bahan ÷ omzet · batas ' + pct(batas, 0), bawah: spark('Food cost', aB.map(x => x.fc), x => pct(x)) }),
       kpi('Biaya karyawan', pl.adaBiaya ? pct(pl.karyPct) : '–', pl.adaBiaya ? '<div class="d"><b>' + rpS(pl.kary) + '</b> dari omzet</div>' : '<div class="d">belum diisi</div>',
         { tab: 'profit', bawah: pl.adaBiaya ? spark('Biaya karyawan', pB.map(x => x.adaBiaya ? x.karyPct : null), x => pct(x)) : '' }),
-      kpi('Rata-rata per struk', a.ticket ? rpS(a.ticket) : '–', a.struk ? d(chgHtml(chg(a.ticket, aP.ticket), true)) : '<div class="d">jumlah struk belum diisi</div>',
-        { tab: 'penjualan', bawah: a.struk ? spark('Rata-rata per struk', aB.map(x => x.ticket || null), rpS) : '' }),
+      (() => {
+        if (!adaKas()) return kpi('Kas', '–', '<div class="d">isi SALDO_AWAL_KAS di sheet</div>', { tab: 'kas' });
+        const tAkhir = batasHariIni(akhirBulan(sc.sampai)), tAwal = hariSebelum(sc.dari + '-01');
+        const kas = saldoScope(sc, tAkhir), delta = kas - saldoScope(sc, tAwal);
+        return kpi('Kas', rpS(kas), '<div class="d"><span class="' + (delta < 0 ? 'up' : 'down') + '">' + (delta >= 0 ? '▲ +' : '▼ −') + rpS(Math.abs(delta)) + '</span> dalam periode</div>',
+          { tab: 'kas', cls: kas < 0 ? 'neg' : '', title: rp(kas) + ' per ' + labelTgl(tAkhir),
+            bawah: spark('Saldo kas akhir bulan', bl.map(b => b + '-01' <= today() ? saldoScope(sc, batasHariIni(akhirBulan(b))) : null), rpS) });
+      })(),
       kpi('Anomali', String(total), '<div class="d">' + (total ? '<b>' + tinggi + '</b> tinggi · <b>' + sedang + '</b> sedang · ' + rendah + ' rendah' : 'tidak ada temuan') + '</div>', { tab: 'anomali', bawah: meter })
     ].join('');
   }
@@ -333,7 +380,7 @@
   setIkonTema();
 
   /* ---------- tabs ---------- */
-  const TABS = ['ringkasan', 'outlet', 'penjualan', 'profit', 'bahan', 'anomali'];
+  const TABS = ['ringkasan', 'outlet', 'penjualan', 'profit', 'kas', 'bahan', 'anomali'];
   function keTab(t) { st.tab = t; renderTab(); }
   $$('.tabs button').forEach(b => b.addEventListener('click', () => keTab(b.dataset.tab)));
   document.addEventListener('click', e => {
@@ -343,7 +390,7 @@
   function renderTab() {
     $$('.tabs button').forEach(x => x.classList.toggle('on', x.dataset.tab === st.tab));
     TABS.forEach(t => $('#v-' + t).classList.toggle('hidden', t !== st.tab));
-    ({ ringkasan: renderRingkasan, outlet: renderOutlet, penjualan: renderPenjualan, profit: renderProfit, bahan: renderBahan, anomali: renderAnomali })[st.tab]();
+    ({ ringkasan: renderRingkasan, outlet: renderOutlet, penjualan: renderPenjualan, profit: renderProfit, kas: renderKas, bahan: renderBahan, anomali: renderAnomali })[st.tab]();
   }
 
   /* ================= RINGKASAN ================= */
@@ -462,7 +509,8 @@
     const hari = [...new Set(a.O.map(r => r.tgl))].length;
     det.innerHTML =
       '<div class="detail-head"><h2><span class="sw" style="background:' + W[s.kode] + '"></span>' + esc(s.kode) + ' · ' + esc(s.nama) + '</h2>' +
-      '<span class="hint">' + labelBulan(sc.dari) + (sc.dari !== sc.sampai ? '–' + labelBulan(sc.sampai) : '') + ' · ' + hari + ' hari omzet tercatat · rata-rata ' + rpS(hari ? p.omz / hari : 0) + '/hari</span></div>' +
+      '<span class="hint">' + labelBulan(sc.dari) + (sc.dari !== sc.sampai ? '–' + labelBulan(sc.sampai) : '') + ' · ' + hari + ' hari omzet tercatat · rata-rata ' + rpS(hari ? p.omz / hari : 0) + '/hari' +
+        (adaKas() && bukuKas(s.kode).mulai ? ' · <b>kas ' + rpS(bukuKas(s.kode).saldo(batasHariIni(akhirBulan(sc.sampai)))) + '</b>' : '') + '</span></div>' +
       '<div class="grid2">' +
         '<div class="card"><div class="card-head"><h2>Omzet harian</h2></div><div class="chart-box short"><canvas id="chOHarian"></canvas></div></div>' +
         '<div class="card"><div class="card-head"><h2>Margin &amp; food cost per bulan</h2></div><div class="chart-box short"><canvas id="chOBulan"></canvas></div></div>' +
@@ -627,6 +675,60 @@
       kary.map(x => '<tr><td class="hint">&nbsp;&nbsp;↳ ' + esc(x[0]) + '</td><td class="n hint">' + rp(x[1]) + '</td><td class="n hint">' + pct(p.omz ? x[1] / p.omz : null) + '</td></tr>').join('') +
       '</tbody><tfoot><tr><td>Laba operasional</td><td class="n' + (p.laba < 0 ? ' neg' : '') + '">' + rp(p.laba) + '</td><td class="n' + (p.laba < 0 ? ' neg' : '') + '">' + pct(p.margin) + '</td></tr></tfoot>';
     $('.tbl-detail').open = true;
+  }
+
+  /* ================= KAS ================= */
+  function renderKas() {
+    const sc = st.scope, D = st.data, W = warnaStore();
+    const stores = D.stores.filter(s => inStore(sc, s.kode));
+    const kosong = !adaKas();
+    $('#kasKosong').classList.toggle('hidden', !kosong);
+    if (kosong) { ['#tbKas', '#tbMutasi'].forEach(id => { $(id).innerHTML = ''; }); return; }
+    const tAwal = hariSebelum(sc.dari + '-01'), tAkhir = batasHariIni(akhirBulan(sc.sampai));
+
+    // saldo harian per outlet
+    const hari = []; for (let d = new Date(sc.dari + '-01T00:00:00Z'); d.toISOString().slice(0, 10) <= tAkhir; d.setUTCDate(d.getUTCDate() + 1)) hari.push(d.toISOString().slice(0, 10));
+    gambar('chKas', 'line', hari.map(labelTgl), stores.slice(0, 8).map(s => {
+      const bk = bukuKas(s.kode);
+      return { label: s.kode, borderColor: W[s.kode], backgroundColor: W[s.kode], data: hari.map(t => bk.mulai && t >= bk.mulai ? bk.saldo(t) : null) };
+    }).concat([{ label: 'Nol', data: hari.map(() => 0), borderColor: css('--muted'), borderDash: [6, 4] }]), { tanpaTitik: true });
+    $('#kasNote').textContent = 'saldo akhir hari · turun tajam di akhir bulan = gaji, sewa & tagihan dibayar';
+
+    // tabel posisi kas
+    const JENIS = ['omzet', 'bahan', 'pembelian', 'gaji', 'tetap', 'tagihan'];
+    const rows = stores.map(s => {
+      const bk = bukuKas(s.kode), r = { s, awal: bk.saldo(tAwal), akhir: bk.saldo(tAkhir), tertunda: bk.tertunda, mulai: bk.mulai, lain: 0 };
+      JENIS.forEach(j => { r[j] = 0; });
+      bk.ev.forEach(e => { if (e.tgl > tAwal && e.tgl <= tAkhir) { if (r[e.jenis] != null && e.jenis !== 'modal' && e.jenis !== 'mutasi') r[e.jenis] += e.v; else r.lain += e.v; } });
+      return r;
+    }).sort((a, b) => b.akhir - a.akhir);
+    const tot = { awal: 0, akhir: 0, lain: 0, tertunda: 0 }; JENIS.forEach(j => { tot[j] = 0; });
+    rows.forEach(r => { ['awal', 'akhir', 'lain', 'tertunda'].concat(JENIS).forEach(k => { tot[k] += r[k]; }); });
+    // saldo akhir di depan (angka yang dicari), rinciannya menyusul
+    const sel = r => '<td class="n' + (r.akhir < 0 ? ' neg' : '') + '" title="' + rp(r.akhir) + '"><b>' + rpJ(r.akhir) + '</b></td>' +
+      '<td class="n">' + chgHtml(r.awal ? (r.akhir - r.awal) / Math.abs(r.awal) : null, true) + '</td>' +
+      tdJ(r.awal, r.awal < 0 ? 'neg' : '') + tdJ(r.omzet) + JENIS.slice(1).map(j => tdJ(r[j], 'biaya')).join('') + tdJ(r.lain, r.lain < 0 ? 'biaya' : '');
+    $('#tbKas').innerHTML = '<thead><tr><th>Outlet</th><th class="n">Saldo akhir</th><th class="n">Perubahan</th><th class="n">Saldo awal</th><th class="n">+ Omzet</th><th class="n">− Bahan</th><th class="n">− Pembelian</th>' +
+      '<th class="n">− Gaji</th><th class="n">− Sewa &amp; tetap</th><th class="n">− Tagihan</th><th class="n">± Modal/mutasi</th></tr></thead><tbody>' +
+      rows.map(r => '<tr class="klik" data-s="' + esc(r.s.kode) + '"><td><span class="sw" style="background:' + W[r.s.kode] + '"></span><b>' + esc(r.s.kode) + '</b></td>' + sel(r) + '</tr>').join('') +
+      '</tbody><tfoot><tr><td>Total</td>' + sel(tot) + '</tr></tfoot>';
+    $$('#tbKas tr.klik').forEach(tr => tr.addEventListener('click', () => pilihOutlet(tr.dataset.s)));
+    const berjalan = sc.sampai >= today().slice(0, 7) && tot.tertunda > 0;
+    $('#kasBerjalan').innerHTML = 'Saldo per ' + labelTgl(tAwal) + ' (awal) dan ' + labelTgl(tAkhir) + ' (akhir). Semua pengeluaran outlet mengurangi kas outlet, siapa pun yang membayar.' +
+      (berjalan ? ' <b>Bulan ini gaji, sewa &amp; tagihan belum dibayar (±' + rpS(tot.tertunda) + ')</b> — setelah dibayar, kas jadi ±' + rpS(tot.akhir - tot.tertunda) + '.' : '');
+
+    // arus kas bersih per bulan (tanpa modal & mutasi)
+    const bl = bulanGrafik(sc);
+    const arus = bl.map(b => sum(stores.map(s => sum(bukuKas(s.kode).ev.filter(e => e.tgl.slice(0, 7) === b && e.jenis !== 'modal' && e.jenis !== 'mutasi').map(e => e.v)))));
+    gambar('chArusKas', 'bar', bl.map(b => labelBulan(b) + (b === today().slice(0, 7) ? '*' : '')), [{ label: 'Arus kas bersih', data: arus, backgroundColor: css('--s1') }], {});
+
+    // saldo awal & mutasi
+    const nama = {}; D.stores.forEach(s => { nama[s.kode] = s.nama; });
+    const mut = (D.kasAwal || []).filter(r => inStore(sc, r.store)).map(r => ({ tgl: r.tgl, store: r.store, jenis: 'Saldo awal', ket: '', v: r.jumlah }))
+      .concat((D.mutasiKas || []).filter(r => inStore(sc, r.store)).map(r => { const a = arahMutasi(r.jenis); return { tgl: r.tgl, store: r.store, jenis: r.jenis, ket: r.ket, v: a ? a * Math.abs(r.jumlah) : r.jumlah }; }))
+      .sort((a, b) => a.tgl < b.tgl ? 1 : -1);
+    $('#tbMutasi').innerHTML = '<thead><tr><th>Tanggal</th><th>Outlet</th><th>Jenis</th><th class="n">Jumlah</th></tr></thead><tbody>' +
+      mut.slice(0, 50).map(m => '<tr><td>' + esc(m.tgl) + '</td><td>' + esc(m.store) + '</td><td>' + esc(m.jenis) + (m.ket ? ' <span class="hint">· ' + esc(m.ket) + '</span>' : '') + '</td>' + tdJ(m.v, m.v < 0 ? 'biaya' : '') + '</tr>').join('') + '</tbody>';
   }
 
   /* ================= BELANJA & BAHAN ================= */
@@ -933,7 +1035,8 @@
       if (!p.omz) return;
       baris.push('- ' + s.kode + ' (' + s.brand + '): omzet ' + rpS(p.omz) + ' (' + (chg(p.omz, pp.omz) == null ? 'n/a' : (chg(p.omz, pp.omz) >= 0 ? '+' : '') + pct(chg(p.omz, pp.omz), 0)) + ') | bahan ' + pct(p.fc) +
         (p.adaBiaya ? ' | karyawan ' + pct(p.karyPct) + ' | tetap/sewa ' + pct(p.tetap / p.omz) + ' | bulanan ' + pct(p.ops / p.omz) + ' | pembelian non-bahan ' + pct(p.pemb / p.omz) + ' | margin ' + pct(p.margin) : ' | biaya belum diisi') +
-        (x.ticket ? ' | per struk ' + rpS(x.ticket) : ''));
+        (x.ticket ? ' | per struk ' + rpS(x.ticket) : '') +
+        (adaKas() && bukuKas(s.kode).mulai ? ' | kas akhir ' + rpS(bukuKas(s.kode).saldo(batasHariIni(akhirBulan(sc.sampai)))) : ''));
     });
     if (plT.adaBiaya) {
       baris.push('Margin total ' + pct(plT.margin) + ', laba operasional ' + rp(plT.laba) + '.');

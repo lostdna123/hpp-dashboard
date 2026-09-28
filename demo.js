@@ -189,7 +189,9 @@
       batasFoodCost: 0.35,
       stores: stores.map(({ kode, brand, nama, aktif }) => ({ kode, brand, nama, aktif })),
       bahan: Object.keys(H).map(n => ({ nama: n, kategori: H[n][0], satuan: H[n][1], brand: 'Semua', acuan: 0 })),
-      belanja, omzet, pembelian, biaya, rincianKaryawan, rincianTetap
+      belanja, omzet, pembelian, biaya, rincianKaryawan, rincianTetap,
+      kasAwal: stores.map(s => ({ store: s.kode, tgl: iso(mulai), jumlah: 100000000 })),
+      mutasiKas: []
     };
   }
 
