@@ -463,6 +463,7 @@ function setup() {
 function siapkanRekap_(ss) {
   const sh = ss.getSheetByName(CFG.SH_REKAP) || ss.insertSheet(CFG.SH_REKAP);
   sh.clear();
+  sh.getRange(1, 1, sh.getMaxRows(), sh.getMaxColumns()).clearDataValidations(); // validasi lama bisa menolak isi baru
   sh.getRange('A1').setValue('Bulan (yyyy-MM):').setFontWeight('bold');
   sh.getRange('B1').setNumberFormat('@').setValue(fmt_(new Date(), 'yyyy-MM'))
     .setBackground('#FEF3C7').setFontWeight('bold');
@@ -501,6 +502,7 @@ function siapkanRekap_(ss) {
 function siapkanTren_(ss) {
   const sh = ss.getSheetByName(CFG.SH_TREN) || ss.insertSheet(CFG.SH_TREN);
   sh.clear();
+  sh.getRange(1, 1, sh.getMaxRows(), sh.getMaxColumns()).clearDataValidations(); // validasi lama bisa menolak isi baru
   sh.clearConditionalFormatRules();
   const B = CFG.SH_BELANJA, O = CFG.SH_OMZET, S = CFG.SH_STORE;
 
@@ -609,6 +611,7 @@ function siapkanBiaya_(ss) {
 function siapkanProfit_(ss) {
   const sh = ss.getSheetByName(CFG.SH_PROFIT) || ss.insertSheet(CFG.SH_PROFIT);
   sh.clear();
+  sh.getRange(1, 1, sh.getMaxRows(), sh.getMaxColumns()).clearDataValidations(); // validasi lama bisa menolak isi baru
   sh.clearConditionalFormatRules();
   const B = CFG.SH_BELANJA, O = CFG.SH_OMZET, S = CFG.SH_STORE, K = CFG.SH_KARYAWAN, T = CFG.SH_TETAP, BL = CFG.SH_BULANAN;
 
