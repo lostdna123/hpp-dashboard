@@ -1,6 +1,6 @@
-# Dashboard HPP
+# Dashboard Restoran
 
-Dashboard food cost & deteksi anomali belanja bahan baku untuk grup FnB multi-brand
+Dashboard performa restoran (per outlet & gabungan) untuk grup FnB multi-brand
 (Uri Gukbap · Bakmi Awei 88 · Baboy · Bakmi Dua Wajah). Data diambil langsung dari
 Google Sheet "HPP" lewat Apps Script. Halaman ini statis, di-host di GitHub Pages.
 
@@ -11,7 +11,24 @@ Google Sheet "HPP" lewat Apps Script. Halaman ini statis, di-host di GitHub Page
    Keduanya hanya disimpan di browser itu (localStorage), tidak ikut ke GitHub.
 3. Mau lihat contoh dulu? **Pengaturan › Coba pakai data demo** (data fiktif).
 
-## Apa yang dideteksi
+## Isi dashboard
+
+Filter periode, brand & outlet berlaku untuk semua tab. Angka utama di atas: omzet, laba operasional + margin,
+food cost, biaya karyawan, rata-rata per struk, jumlah anomali (semua dibanding periode sebelumnya).
+
+| Tab | Isi |
+|---|---|
+| **Ringkasan** | Omzet per bulan per outlet · tren margin / food cost / karyawan · tabel performa outlet dengan status (✓ Sehat / ! Perlu perhatian / ▲ Kritis) · per brand · 4 hal yang perlu perhatian · Analisis AI · tren bulanan |
+| **Outlet** | Kartu tiap outlet → klik untuk detail: omzet harian, margin & food cost per bulan, laba rugi, tim per jabatan, 10 bahan terbesar, anomali outlet itu |
+| **Penjualan** | Omzet harian · rata-rata per hari dalam minggu · rata-rata per struk · tabel penjualan per outlet (hari terbaik) |
+| **Profit** | Margin per outlet per bulan · laba rugi per outlet (klik untuk rincian biaya) · biaya per pos |
+| **Belanja & Bahan** | Belanja per kategori · food cost per outlet · tabel bahan (harga vs periode sebelumnya) · riwayat belanja lengkap (cari, catatan, link foto nota) |
+| **Anomali** | Semua temuan deteksi otomatis, bisa difilter per jenis, tiap kartu ada grafiknya |
+
+Status outlet: **Kritis** kalau rugi atau food cost > batas + 5 poin; **Perlu perhatian** kalau margin < 10%,
+food cost > batas (35%), atau ada anomali tingkat tinggi.
+
+## Apa yang dideteksi (tab Anomali)
 
 Semua deteksi jalan di browser, murni statistik (median & MAD / robust z-score), **tanpa token AI**:
 
@@ -36,8 +53,8 @@ proporsional dengan hari yang sudah lewat.
 
 ## Analisis AI (hemat token)
 
-Tombol **✨ Analisis AI** hanya jalan saat diklik. Yang dikirim ke Claude hanya **ringkasan**
-(maks. 15 anomali teratas + food cost per outlet 3 bulan), bukan data mentah — ±1.500–2.500 token
+Tombol **✨ Analisis AI** (tab Ringkasan) hanya jalan saat diklik. Yang dikirim ke Claude hanya **ringkasan**
+(performa tiap outlet, margin & food cost 3 bulan, anomali teratas, bahan terbesar), bukan data mentah — ±1.500–2.500 token
 per analisis. Hasil disimpan di browser; selama data & filter belum berubah, hasil lama ditampilkan
 tanpa memanggil AI lagi.
 

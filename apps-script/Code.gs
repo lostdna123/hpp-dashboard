@@ -151,11 +151,12 @@ function dataDashboard_() {
   const tgl = v => (v instanceof Date) ? fmt_(v, 'yyyy-MM-dd') : String(v || '').slice(0, 10);
   const wkt = v => (v instanceof Date) ? v.toISOString() : String(v || '');
 
-  // belanja: [tanggal, bulan, brand, kodeStore, pic, kategori, bahan, qty, satuan, harga, total, supplier, flag, idKiriman, waktuInput]
+  // belanja: [tanggal, bulan, brand, kodeStore, pic, kategori, bahan, qty, satuan, harga, total, supplier, flag, idKiriman, waktuInput, catatan, linkFotoNota]
   const belanja = shB.getLastRow() < 2 ? [] : shB.getRange(2, 1, shB.getLastRow() - 1, 19).getValues()
     .filter(r => r[0] !== '' && r[5] !== '')
     .map(r => [tgl(r[2]), String(r[3]), String(r[4]), String(r[5]), String(r[7]), String(r[8]), String(r[9]),
-      Number(r[10]) || 0, String(r[11]), Number(r[12]) || 0, Number(r[13]) || 0, String(r[14]), String(r[17]), String(r[18]), wkt(r[1])]);
+      Number(r[10]) || 0, String(r[11]), Number(r[12]) || 0, Number(r[13]) || 0, String(r[14]), String(r[17]), String(r[18]), wkt(r[1]),
+      String(r[15]), String(r[16])]);
 
   // omzet: [tanggal, bulan, brand, kodeStore, omzet, struk]
   const omzet = shO.getLastRow() < 2 ? [] : shO.getRange(2, 1, shO.getLastRow() - 1, 12).getValues()
@@ -816,11 +817,12 @@ function biayaDashboard_(ss, bulanDipakai) {
 
   bulanan.forEach(r => bulanDipakai.add(r.bulan));
   const semua = [...bulanDipakai].filter(b => /^\d{4}-\d{2}$/.test(b)).sort();
-  const agg = new Map();
-  const tambah = (bulan, store, kelompok, kategori, n) => {
+  const agg = new Map(), orang = new Map();
+  const tambah = (bulan, store, kelompok, kategori, n, jmlOrang) => {
     if (!store || !n) return;
     const k = [bulan, store, kelompok, kategori].join('|');
     agg.set(k, (agg.get(k) || 0) + n);
+    if (jmlOrang) orang.set(k, (orang.get(k) || 0) + jmlOrang);
   };
   if (semua.length) {
     let [y, m] = semua[0].split('-').map(Number);
@@ -832,14 +834,14 @@ function biayaDashboard_(ss, bulanDipakai) {
       const aw = Utilities.parseDate(b + '-01 00:00', CFG.TZ, 'yyyy-MM-dd HH:mm');
       const ak = Utilities.parseDate(b + '-' + hari + ' 23:59', CFG.TZ, 'yyyy-MM-dd HH:mm');
       const aktif = x => (!x.mulai || x.mulai <= ak) && (!x.selesai || x.selesai >= aw);
-      kary.filter(aktif).forEach(x => tambah(b, x.store, 'Karyawan', x.kategori, x.jumlah));
+      kary.filter(aktif).forEach(x => tambah(b, x.store, 'Karyawan', x.kategori, x.jumlah, 1));
       tetap.filter(aktif).forEach(x => tambah(b, x.store, 'Tetap', x.kategori, x.jumlah));
       m++; if (m > 12) { m = 1; y++; }
     }
   }
   bulanan.forEach(r => tambah(r.bulan, r.store, 'Operasional', r.kategori, r.jumlah));
-  // [bulan, kodeStore, kelompok (Karyawan|Tetap|Operasional), kategori/jabatan, jumlah]
-  return [...agg.entries()].map(([k, v]) => k.split('|').concat([Math.round(v)]));
+  // [bulan, kodeStore, kelompok (Karyawan|Tetap|Operasional), kategori/jabatan, jumlah, jumlahOrang (khusus Karyawan)]
+  return [...agg.entries()].map(([k, v]) => k.split('|').concat([Math.round(v), orang.get(k) || 0]));
 }
 
 function siapkanKamus_(ss) {
@@ -1015,11 +1017,6 @@ function fmt_(d, pola) {
 function validasi_(pesan) {
   return new Error('[VALIDASI] ' + pesan);
 }
-
-
-/* ============================================================
- *  GENERATOR DATA DUMMY — salinan demo.js dari repo dashboard (jangan diedit di sini)
- * ============================================================ */
 /*
  * Data demo (FIKTIF) — 6 bulan, 5 outlet, dengan beberapa anomali yang sengaja ditanam
  * supaya dashboard bisa dicoba sebelum data asli terkumpul. Deterministik (seed tetap).
@@ -1153,10 +1150,10 @@ function validasi_(pesan) {
     });
     bulanList.forEach(bulan => {
       stores.forEach(s => {
-        const add = (kelompok, kategori, jumlah) => biaya.push({ bulan, store: s.kode, kelompok, kategori, jumlah: Math.round(jumlah / 1000) * 1000 });
+        const add = (kelompok, kategori, jumlah, orang) => biaya.push({ bulan, store: s.kode, kelompok, kategori, jumlah: Math.round(jumlah / 1000) * 1000, orang: orang || 0 });
         const staf = s.brand === 'Uri Gukbap' ? STAF['Uri Gukbap'] : s.brand === 'Baboy' ? STAF.Baboy : STAF.Bakmi;
         const skala = s.kode === 'UG-02' ? 0.8 : 1;
-        staf.forEach(([jab, n, gaji]) => add('Karyawan', jab, Math.max(1, Math.round(n * skala)) * gaji));
+        staf.forEach(([jab, n, gaji]) => { const org = Math.max(1, Math.round(n * skala)); add('Karyawan', jab, org * gaji, org); });
         add('Tetap', 'Sewa tempat', SEWA[s.kode]);
         if (MALL[s.kode]) add('Tetap', 'Service charge / IPL', MALL[s.kode]);
         add('Tetap', 'Internet & telepon', 650000);

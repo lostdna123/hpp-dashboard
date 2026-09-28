@@ -131,10 +131,10 @@
     });
     bulanList.forEach(bulan => {
       stores.forEach(s => {
-        const add = (kelompok, kategori, jumlah) => biaya.push({ bulan, store: s.kode, kelompok, kategori, jumlah: Math.round(jumlah / 1000) * 1000 });
+        const add = (kelompok, kategori, jumlah, orang) => biaya.push({ bulan, store: s.kode, kelompok, kategori, jumlah: Math.round(jumlah / 1000) * 1000, orang: orang || 0 });
         const staf = s.brand === 'Uri Gukbap' ? STAF['Uri Gukbap'] : s.brand === 'Baboy' ? STAF.Baboy : STAF.Bakmi;
         const skala = s.kode === 'UG-02' ? 0.8 : 1;
-        staf.forEach(([jab, n, gaji]) => add('Karyawan', jab, Math.max(1, Math.round(n * skala)) * gaji));
+        staf.forEach(([jab, n, gaji]) => { const org = Math.max(1, Math.round(n * skala)); add('Karyawan', jab, org * gaji, org); });
         add('Tetap', 'Sewa tempat', SEWA[s.kode]);
         if (MALL[s.kode]) add('Tetap', 'Service charge / IPL', MALL[s.kode]);
         add('Tetap', 'Internet & telepon', 650000);

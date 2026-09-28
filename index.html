@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Dashboard HPP</title>
-<meta name="description" content="Dashboard food cost & deteksi anomali belanja bahan baku per outlet.">
+<title>Dashboard Restoran</title>
+<meta name="description" content="Dashboard performa restoran per outlet & gabungan: penjualan, profit, food cost, belanja bahan, dan anomali.">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23B3401F'/%3E%3Cpath d='M16 44 L28 30 L36 38 L48 20' stroke='white' stroke-width='6' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
 <link rel="stylesheet" href="style.css">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.js" defer></script>
@@ -21,7 +21,7 @@
         <svg viewBox="0 0 64 64"><path d="M16 44 L28 30 L36 38 L48 20" stroke="currentColor" stroke-width="6" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
       </div>
       <div>
-        <h1>Dashboard HPP</h1>
+        <h1>Dashboard Restoran</h1>
         <div class="sub"><span id="status" class="status">Belum terhubung</span><span id="diambil"></span></div>
       </div>
     </div>
@@ -38,19 +38,47 @@
     <label>Outlet<select id="fStore"></select></label>
   </section>
 
-  <section class="kpis" id="kpis" aria-label="Ringkasan"></section>
+  <section class="kpis" id="kpis" aria-label="Angka utama"></section>
 
   <nav class="tabs" role="tablist">
-    <button role="tab" data-tab="anomali" class="on">Anomali <span class="count" id="cntAnomali"></span></button>
+    <button role="tab" data-tab="ringkasan" class="on">Ringkasan</button>
+    <button role="tab" data-tab="outlet">Outlet</button>
+    <button role="tab" data-tab="penjualan">Penjualan</button>
     <button role="tab" data-tab="profit">Profit</button>
-    <button role="tab" data-tab="store">Per outlet</button>
-    <button role="tab" data-tab="item">Per bahan</button>
-    <button role="tab" data-tab="bulan">Per bulan</button>
+    <button role="tab" data-tab="bahan">Belanja &amp; Bahan</button>
+    <button role="tab" data-tab="anomali">Anomali <span class="count" id="cntAnomali"></span></button>
   </nav>
 
   <main>
-    <!-- ===== ANOMALI ===== -->
-    <section id="v-anomali" class="view">
+    <!-- ===== RINGKASAN ===== -->
+    <section id="v-ringkasan" class="view">
+      <div class="grid2">
+        <div class="card">
+          <div class="card-head"><h2>Omzet per bulan</h2><span class="hint">per outlet, ditumpuk</span></div>
+          <div class="chart-box"><canvas id="chOmzetBulan" aria-label="Grafik omzet per bulan per outlet"></canvas></div>
+        </div>
+        <div class="card">
+          <div class="card-head"><h2>Margin, food cost &amp; karyawan</h2><span class="hint">% dari omzet, outlet sesuai filter</span></div>
+          <div class="chart-box"><canvas id="chRasio" aria-label="Grafik margin, food cost dan biaya karyawan per bulan"></canvas></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-head"><h2>Performa outlet</h2><span class="hint">periode sesuai filter · klik baris untuk detail outlet</span></div>
+        <div class="table-wrap"><table id="tbPerforma"></table></div>
+      </div>
+
+      <div class="grid2">
+        <div class="card">
+          <div class="card-head"><h2>Per brand</h2></div>
+          <div class="table-wrap"><table id="tbBrand"></table></div>
+        </div>
+        <div class="card">
+          <div class="card-head"><h2>Perlu perhatian</h2><button class="btn ghost small" data-goto="anomali">Semua anomali →</button></div>
+          <div id="perhatian"></div>
+        </div>
+      </div>
+
       <div class="card ai">
         <div class="ai-head">
           <div>
@@ -69,21 +97,51 @@
         <div id="aiOut" class="ai-out hidden"></div>
       </div>
 
-      <div class="chips" id="chips" role="group" aria-label="Filter jenis anomali"></div>
-      <div id="anList" class="an-list"></div>
+      <div class="card">
+        <div class="card-head"><h2>Tren bulanan</h2><span class="hint">outlet sesuai filter</span></div>
+        <div class="table-wrap"><table id="tbTren"></table></div>
+      </div>
+    </section>
+
+    <!-- ===== OUTLET ===== -->
+    <section id="v-outlet" class="view hidden">
+      <div class="outlet-grid" id="outletGrid"></div>
+      <div id="outletDetail"></div>
+    </section>
+
+    <!-- ===== PENJUALAN ===== -->
+    <section id="v-penjualan" class="view hidden">
+      <div class="card">
+        <div class="card-head"><h2>Omzet harian</h2><span class="hint" id="harianNote"></span></div>
+        <div class="chart-box"><canvas id="chHarian" aria-label="Grafik omzet harian"></canvas></div>
+      </div>
+      <div class="grid2">
+        <div class="card">
+          <div class="card-head"><h2>Rata-rata omzet per hari</h2><span class="hint">semua outlet dipilih, per hari dalam minggu</span></div>
+          <div class="chart-box short"><canvas id="chHariMinggu" aria-label="Grafik rata-rata omzet per hari dalam minggu"></canvas></div>
+        </div>
+        <div class="card">
+          <div class="card-head"><h2>Rata-rata per struk</h2><span class="hint">omzet ÷ jumlah struk, per bulan</span></div>
+          <div class="chart-box short"><canvas id="chTicket" aria-label="Grafik rata-rata nilai per struk per bulan"></canvas></div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-head"><h2>Penjualan per outlet</h2><span class="hint">periode sesuai filter</span></div>
+        <div class="table-wrap"><table id="tbPenjualan"></table></div>
+      </div>
     </section>
 
     <!-- ===== PROFIT ===== -->
     <section id="v-profit" class="view hidden">
       <div class="card hidden" id="profitKosong">
         <h2>Biaya operasional belum diisi</h2>
-        <p class="hint">Untuk menghitung laba & margin, isi di Google Sheet:</p>
+        <p class="hint">Untuk menghitung laba &amp; margin, isi di Google Sheet:</p>
         <ul class="hint">
           <li><b>MASTER_KARYAWAN</b>: 1 baris per karyawan (outlet, nama, jabatan, gaji, tunjangan, BPJS).</li>
           <li><b>BIAYA_TETAP</b>: sewa (÷12 kalau bayar tahunan), internet, POS, dll per bulan.</li>
           <li><b>BIAYA_BULANAN</b>: listrik, air, perbaikan, marketing, komisi ojol, dll per bulan.</li>
         </ul>
-        <p class="hint">Sementara itu, tabel di bawah menampilkan laba kotor (omzet − bahan). Mau lihat contoh lengkap? Pengaturan › Coba pakai data demo.</p>
+        <p class="hint">Sementara itu, tabel di bawah menampilkan laba kotor (omzet − bahan).</p>
       </div>
       <div class="card">
         <div class="card-head"><h2>Margin operasional per outlet per bulan</h2><span class="hint" id="profitNote"></span></div>
@@ -93,47 +151,53 @@
         <div class="card-head"><h2>Laba rugi per outlet</h2><span class="hint">periode sesuai filter · klik baris untuk rincian biaya</span></div>
         <div class="table-wrap"><table id="tbProfit"></table></div>
       </div>
-    </section>
-
-    <!-- ===== PER OUTLET ===== -->
-    <section id="v-store" class="view hidden">
       <div class="card">
-        <div class="card-head"><h2>Food cost per outlet per bulan</h2><span class="hint" id="storeChartNote"></span></div>
-        <div class="chart-box"><canvas id="chStore" aria-label="Grafik food cost per outlet per bulan"></canvas></div>
-      </div>
-      <div class="card">
-        <div class="card-head"><h2>Ringkasan outlet</h2><span class="hint">klik baris untuk fokus ke outlet itu</span></div>
-        <div class="table-wrap"><table id="tbStore"></table></div>
+        <div class="card-head"><h2>Biaya per pos</h2><span class="hint">outlet sesuai filter, % dari omzet</span></div>
+        <div class="table-wrap"><table id="tbPos"></table></div>
       </div>
     </section>
 
-    <!-- ===== PER BAHAN ===== -->
-    <section id="v-item" class="view hidden">
+    <!-- ===== BELANJA & BAHAN ===== -->
+    <section id="v-bahan" class="view hidden">
+      <div class="grid2">
+        <div class="card">
+          <div class="card-head"><h2>Belanja per kategori</h2><span class="hint">% dari omzet</span></div>
+          <div class="chart-box short"><canvas id="chKategori" aria-label="Grafik belanja per kategori sebagai persen omzet"></canvas></div>
+        </div>
+        <div class="card">
+          <div class="card-head"><h2>Food cost per outlet per bulan</h2><span class="hint" id="fcNote"></span></div>
+          <div class="chart-box short"><canvas id="chFc" aria-label="Grafik food cost per outlet per bulan"></canvas></div>
+        </div>
+      </div>
       <div class="card">
         <div class="card-head">
           <h2>Bahan baku</h2>
           <input id="qItem" type="search" placeholder="Cari bahan…" aria-label="Cari bahan">
         </div>
-        <p class="hint">Harga rata-rata dibanding periode sebelumnya dengan panjang yang sama. Klik baris untuk lihat grafik harga per outlet.</p>
+        <p class="hint">Harga rata-rata dibanding periode sebelumnya dengan panjang yang sama. Klik baris untuk grafik harga per outlet.</p>
         <div class="table-wrap"><table id="tbItem"></table></div>
+      </div>
+      <div class="card">
+        <div class="card-head">
+          <h2>Riwayat belanja</h2>
+          <input id="qLog" type="search" placeholder="Cari bahan, outlet, PIC, supplier…" aria-label="Cari riwayat belanja">
+        </div>
+        <p class="hint" id="logInfo"></p>
+        <div class="table-wrap"><table id="tbLog" class="log"></table></div>
+        <button class="btn ghost more hidden" id="btnLogMore">Tampilkan lebih banyak</button>
       </div>
     </section>
 
-    <!-- ===== PER BULAN ===== -->
-    <section id="v-bulan" class="view hidden">
-      <div class="card">
-        <div class="card-head"><h2>Food cost gabungan per bulan</h2><span class="hint">outlet sesuai filter</span></div>
-        <div class="chart-box"><canvas id="chBulan" aria-label="Grafik food cost gabungan per bulan"></canvas></div>
-      </div>
-      <div class="card">
-        <div class="card-head"><h2>Rincian per bulan</h2></div>
-        <div class="table-wrap"><table id="tbBulan"></table></div>
-      </div>
+    <!-- ===== ANOMALI ===== -->
+    <section id="v-anomali" class="view hidden">
+      <p class="hint">Deteksi otomatis (statistik) terhadap harga bahan, pemakaian, food cost, biaya & margin. Butuh histori ±3 bulan untuk perbandingan yang adil. Minta AI menjelaskan di tab <a href="#" data-goto="ringkasan">Ringkasan</a>.</p>
+      <div class="chips" id="chips" role="group" aria-label="Filter jenis anomali"></div>
+      <div id="anList" class="an-list"></div>
     </section>
   </main>
 
   <footer class="foot">
-    Deteksi anomali dihitung di browser (statistik median &amp; MAD) · AI hanya menjelaskan hasilnya saat diminta · Data dari Google Sheet lewat Apps Script
+    Data dari Google Sheet lewat Apps Script · Deteksi anomali dihitung di browser · AI hanya jalan saat diminta
   </footer>
 </div>
 
@@ -141,7 +205,7 @@
 <dialog id="dlgSetting">
   <form method="dialog" class="dlg">
     <h2>Pengaturan koneksi</h2>
-    <p class="hint">Ambil <b>URL Apps Script</b> dan <b>kunci dashboard</b> dari Google Sheet: menu <b>🍜 HPP › Buat / ganti kunci dashboard</b>. Keduanya cuma disimpan di browser ini.</p>
+    <p class="hint">Ambil <b>URL Apps Script</b> (Deploy › Manage deployments › Web app URL) dan <b>kunci dashboard</b> (menu <b>🍜 HPP › Buat / ganti kunci dashboard</b>). Keduanya cuma disimpan di browser ini.</p>
     <label>URL Apps Script (…/exec)<input id="sUrl" type="url" placeholder="https://script.google.com/macros/s/…/exec" autocomplete="off"></label>
     <label>Kunci dashboard<input id="sKey" type="password" autocomplete="off"></label>
     <div id="sMsg" class="msg hidden"></div>

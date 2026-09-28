@@ -167,3 +167,50 @@ tfoot td{font-weight:700;border-top:2px solid var(--line-strong);border-bottom:0
 td.neg{color:var(--bad);font-weight:700}
 .kpi .v.neg{color:var(--bad)}
 #profitKosong ul{margin:6px 0;padding-left:20px}
+
+/* ===== layout dashboard performa ===== */
+.grid2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.grid2 > .card{margin-bottom:12px;min-width:0}
+.chart-box.short{height:240px}
+.btn.small{padding:4px 10px;font-size:13px}
+.kpi.klik{cursor:pointer}
+.kpi.klik:hover{border-color:var(--line-strong)}
+.kpi .v.good{color:var(--good)}
+
+/* status outlet: warna + ikon + label, tidak pernah warna saja */
+.st{display:inline-flex;align-items:center;gap:4px;padding:1px 8px;border-radius:99px;font-size:12px;font-weight:700;white-space:nowrap;color:var(--ink)}
+.st i{font-style:normal;font-weight:800}
+.st.sehat{background:#e3f3ea} .st.sehat i{color:#0b7a3a}
+.st.perhatian{background:var(--warn-soft)} .st.perhatian i{color:#b07a00}
+.st.kritis{background:var(--crit-soft)} .st.kritis i{color:var(--crit)}
+@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]) .st.sehat{background:#16301f} :root:not([data-theme="light"]) .st.sehat i{color:#5cc08c} }
+:root[data-theme="dark"] .st.sehat{background:#16301f} :root[data-theme="dark"] .st.sehat i{color:#5cc08c}
+
+/* kartu outlet */
+.outlet-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:10px;margin-bottom:12px}
+.ocard{background:var(--surface);border:1px solid var(--line);border-top:4px solid var(--c,var(--line-strong));border-radius:var(--r);padding:12px 14px;cursor:pointer;box-shadow:var(--shadow);text-align:left;width:100%}
+.ocard:hover{border-color:var(--line-strong);border-top-color:var(--c)}
+.ocard.on{outline:2px solid var(--accent);outline-offset:1px}
+.ocard .oh{display:flex;justify-content:space-between;gap:8px;align-items:flex-start}
+.ocard .on1{font-weight:700}
+.ocard .on2{font-size:12px;color:var(--muted)}
+.ocard .om{display:grid;grid-template-columns:1fr 1fr;gap:8px 12px;margin-top:10px}
+.ocard .om div span{display:block;font-size:11px;color:var(--muted);font-weight:600}
+.ocard .om div b{font-size:16px}
+.ocard .om div small{font-size:11px;margin-left:4px}
+.detail-head{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin:6px 0 10px}
+.detail-head h2{font-size:18px}
+
+/* daftar perhatian */
+.ph{display:flex;gap:10px;padding:10px 0;border-top:1px solid var(--line);align-items:flex-start}
+.ph:first-child{border-top:0;padding-top:2px}
+.ph .t{font-weight:600;font-size:14px}
+.ph .m{font-size:12.5px;color:var(--ink-2)}
+.ph button{margin-left:auto;flex:none}
+
+table.log td,table.log th{font-size:12.5px;padding:6px 8px}
+.more{display:block;margin:10px auto 0}
+a{color:var(--accent)}
+.kosong{color:var(--muted);font-size:14px;padding:6px 0}
+
+@media (max-width:900px){ .grid2{grid-template-columns:minmax(0,1fr)} .grid2 > .card{margin-bottom:0} .grid2{gap:12px;margin-bottom:12px} }
