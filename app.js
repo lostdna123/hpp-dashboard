@@ -54,15 +54,29 @@
   const PRIME_MAKS = 0.65;   // prime cost (bahan + karyawan) di atas ini = terlalu berat — patokan umum industri FnB
 
   /* ================= koneksi ================= */
-  async function api(body) {
-    const res = await fetch(st.cfg.url, {
-      method: 'POST', redirect: 'follow',
-      headers: { 'Content-Type': 'text/plain;charset=utf-8' }, // "simple request" → tanpa preflight CORS
-      body: JSON.stringify(Object.assign({ key: st.cfg.key }, body))
-    });
-    const txt = await res.text();
+  /** Panggil Apps Script. Gangguan sesaat dari Google (halaman error HTML / koneksi putus) dicoba ulang otomatis. */
+  async function api(body, percobaan) {
+    percobaan = percobaan || 1;
+    const MAKS = 3;
+    let res, txt;
+    try {
+      res = await fetch(st.cfg.url, {
+        method: 'POST', redirect: 'follow',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' }, // "simple request" → tanpa preflight CORS
+        body: JSON.stringify(Object.assign({ key: st.cfg.key }, body))
+      });
+      txt = await res.text();
+    } catch (e) {
+      if (percobaan < MAKS) { await new Promise(r => setTimeout(r, 1500 * percobaan)); return api(body, percobaan + 1); }
+      throw new Error('Tidak bisa menghubungi Google (' + e.message + '). Cek internet, lalu klik Refresh.');
+    }
     let out;
-    try { out = JSON.parse(txt); } catch (e) { throw new Error('Respon bukan JSON. Cek URL (harus berakhiran /exec) dan pastikan Apps Script sudah di-deploy versi terbaru.'); }
+    try { out = JSON.parse(txt); } catch (e) {
+      if (percobaan < MAKS) { await new Promise(r => setTimeout(r, 1500 * percobaan)); return api(body, percobaan + 1); }
+      const cuplikan = String(txt || '').replace(/<(style|script)[\s\S]*?<\/\1>/gi, ' ').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 180);
+      throw new Error('Google tidak mengirim data (HTTP ' + (res && res.status) + ', sudah dicoba ' + MAKS + '×). ' +
+        (cuplikan ? 'Pesan Google: "' + cuplikan + '". ' : 'Responnya kosong. ') + 'Pastikan URL berakhiran /exec, lalu coba lagi beberapa saat.');
+    }
     if (!out.ok) throw new Error(out.error || 'Gagal');
     return out;
   }
