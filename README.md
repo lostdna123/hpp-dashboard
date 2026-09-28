@@ -1,0 +1,43 @@
+# Dashboard HPP
+
+Dashboard food cost & deteksi anomali belanja bahan baku untuk grup FnB multi-brand
+(Uri Gukbap · Bakmi Awei 88 · Baboy · Bakmi Dua Wajah). Data diambil langsung dari
+Google Sheet "HPP" lewat Apps Script. Halaman ini statis, di-host di GitHub Pages.
+
+## Cara pakai
+
+1. Di Google Sheet: menu **🍜 HPP › Buat / ganti kunci dashboard**. Muncul kunci + URL Apps Script.
+2. Buka dashboard → **Pengaturan** → isi URL (`…/exec`) dan kunci → **Simpan & sambungkan**.
+   Keduanya hanya disimpan di browser itu (localStorage), tidak ikut ke GitHub.
+3. Mau lihat contoh dulu? **Pengaturan › Coba pakai data demo** (data fiktif).
+
+## Apa yang dideteksi
+
+Semua deteksi jalan di browser, murni statistik (median & MAD / robust z-score), **tanpa token AI**:
+
+| Dimensi | Deteksi |
+|---|---|
+| Per bahan | Harga melonjak vs histori 60 hari outlet itu sendiri · Harga lebih mahal dari outlet lain (bahan & bulan sama) · Kenaikan serentak di ≥3 outlet (kemungkinan harga pasar) · Pemakaian (qty) melonjak vs 3–6 bulan sebelumnya, disesuaikan dengan omzet |
+| Per outlet | Food cost di atas batas · naik dari biasanya · lebih tinggi dari outlet lain |
+| Per bulan | Porsi belanja per kategori terhadap omzet melonjak · total belanja melonjak (kalau omzet kosong) |
+| Kualitas data | Omzet tidak diinput beberapa hari · outlet tidak input belanja >7 hari · kemungkinan input dobel |
+
+Deteksi butuh histori ±3 bulan supaya perbandingannya adil.
+
+## Analisis AI (hemat token)
+
+Tombol **✨ Analisis AI** hanya jalan saat diklik. Yang dikirim ke Claude hanya **ringkasan**
+(maks. 15 anomali teratas + food cost per outlet 3 bulan), bukan data mentah — ±1.500–2.500 token
+per analisis. Hasil disimpan di browser; selama data & filter belum berubah, hasil lama ditampilkan
+tanpa memanggil AI lagi.
+
+- API key Claude disimpan di **Script Properties** Apps Script (menu **🍜 HPP › Set API key Claude**),
+  tidak pernah ada di halaman ini atau di GitHub.
+- Pengaman biaya: maks. 30 analisis per hari (ubah `AI_MAKS_PER_HARI` di Code.gs).
+- Model: Haiku 4.5 (default, paling hemat) atau Sonnet 5 (lebih tajam).
+
+## File
+
+- `index.html`, `style.css`, `app.js` — tampilan & logika dashboard
+- `anomali.js` — mesin deteksi anomali (bisa dites di Node: `node -e "require('./anomali.js')"`)
+- `demo.js` — generator data demo fiktif dengan anomali yang sengaja ditanam

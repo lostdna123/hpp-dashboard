@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Dashboard HPP</title>
+<meta name="description" content="Dashboard food cost & deteksi anomali belanja bahan baku per outlet.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23B3401F'/%3E%3Cpath d='M16 44 L28 30 L36 38 L48 20' stroke='white' stroke-width='6' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="style.css">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.js" defer></script>
+<script src="anomali.js" defer></script>
+<script src="demo.js" defer></script>
+<script src="app.js" defer></script>
+</head>
+<body>
+<div class="shell">
+
+  <header class="top">
+    <div class="brand">
+      <div class="logo" aria-hidden="true">
+        <svg viewBox="0 0 64 64"><path d="M16 44 L28 30 L36 38 L48 20" stroke="currentColor" stroke-width="6" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </div>
+      <div>
+        <h1>Dashboard HPP</h1>
+        <div class="sub"><span id="status" class="status">Belum terhubung</span><span id="diambil"></span></div>
+      </div>
+    </div>
+    <div class="actions">
+      <button class="btn ghost" id="btnRefresh" title="Ambil data terbaru">↻ <span>Refresh</span></button>
+      <button class="btn ghost" id="btnSetting" title="Pengaturan koneksi">⚙ <span>Pengaturan</span></button>
+    </div>
+  </header>
+
+  <section class="filters" aria-label="Filter">
+    <label>Dari<select id="fDari"></select></label>
+    <label>Sampai<select id="fSampai"></select></label>
+    <label>Brand<select id="fBrand"></select></label>
+    <label>Outlet<select id="fStore"></select></label>
+  </section>
+
+  <section class="kpis" id="kpis" aria-label="Ringkasan"></section>
+
+  <nav class="tabs" role="tablist">
+    <button role="tab" data-tab="anomali" class="on">Anomali <span class="count" id="cntAnomali"></span></button>
+    <button role="tab" data-tab="store">Per outlet</button>
+    <button role="tab" data-tab="item">Per bahan</button>
+    <button role="tab" data-tab="bulan">Per bulan</button>
+  </nav>
+
+  <main>
+    <!-- ===== ANOMALI ===== -->
+    <section id="v-anomali" class="view">
+      <div class="card ai">
+        <div class="ai-head">
+          <div>
+            <h2>✨ Analisis AI</h2>
+            <p class="hint" id="aiMeta">AI cuma jalan kalau tombol diklik.</p>
+          </div>
+          <div class="ai-ctrl">
+            <select id="aiModel" aria-label="Model AI">
+              <option value="claude-haiku-4-5-20251001">Hemat · Haiku 4.5</option>
+              <option value="claude-sonnet-5">Lebih tajam · Sonnet 5</option>
+            </select>
+            <button class="btn primary" id="btnAI">Analisis sekarang</button>
+          </div>
+        </div>
+        <div id="aiOut" class="ai-out hidden"></div>
+      </div>
+
+      <div class="chips" id="chips" role="group" aria-label="Filter jenis anomali"></div>
+      <div id="anList" class="an-list"></div>
+    </section>
+
+    <!-- ===== PER OUTLET ===== -->
+    <section id="v-store" class="view hidden">
+      <div class="card">
+        <div class="card-head"><h2>Food cost per outlet per bulan</h2><span class="hint" id="storeChartNote"></span></div>
+        <div class="chart-box"><canvas id="chStore" aria-label="Grafik food cost per outlet per bulan"></canvas></div>
+      </div>
+      <div class="card">
+        <div class="card-head"><h2>Ringkasan outlet</h2><span class="hint">klik baris untuk fokus ke outlet itu</span></div>
+        <div class="table-wrap"><table id="tbStore"></table></div>
+      </div>
+    </section>
+
+    <!-- ===== PER BAHAN ===== -->
+    <section id="v-item" class="view hidden">
+      <div class="card">
+        <div class="card-head">
+          <h2>Bahan baku</h2>
+          <input id="qItem" type="search" placeholder="Cari bahan…" aria-label="Cari bahan">
+        </div>
+        <p class="hint">Harga rata-rata dibanding periode sebelumnya dengan panjang yang sama. Klik baris untuk lihat grafik harga per outlet.</p>
+        <div class="table-wrap"><table id="tbItem"></table></div>
+      </div>
+    </section>
+
+    <!-- ===== PER BULAN ===== -->
+    <section id="v-bulan" class="view hidden">
+      <div class="card">
+        <div class="card-head"><h2>Food cost gabungan per bulan</h2><span class="hint">outlet sesuai filter</span></div>
+        <div class="chart-box"><canvas id="chBulan" aria-label="Grafik food cost gabungan per bulan"></canvas></div>
+      </div>
+      <div class="card">
+        <div class="card-head"><h2>Rincian per bulan</h2></div>
+        <div class="table-wrap"><table id="tbBulan"></table></div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="foot">
+    Deteksi anomali dihitung di browser (statistik median &amp; MAD) · AI hanya menjelaskan hasilnya saat diminta · Data dari Google Sheet lewat Apps Script
+  </footer>
+</div>
+
+<!-- ===== PENGATURAN ===== -->
+<dialog id="dlgSetting">
+  <form method="dialog" class="dlg">
+    <h2>Pengaturan koneksi</h2>
+    <p class="hint">Ambil <b>URL Apps Script</b> dan <b>kunci dashboard</b> dari Google Sheet: menu <b>🍜 HPP › Buat / ganti kunci dashboard</b>. Keduanya cuma disimpan di browser ini.</p>
+    <label>URL Apps Script (…/exec)<input id="sUrl" type="url" placeholder="https://script.google.com/macros/s/…/exec" autocomplete="off"></label>
+    <label>Kunci dashboard<input id="sKey" type="password" autocomplete="off"></label>
+    <div id="sMsg" class="msg hidden"></div>
+    <div class="dlg-actions">
+      <button type="button" class="btn ghost" id="sDemo">Coba pakai data demo</button>
+      <span class="spacer"></span>
+      <button type="button" class="btn ghost" id="sBatal">Tutup</button>
+      <button type="button" class="btn primary" id="sSimpan">Simpan &amp; sambungkan</button>
+    </div>
+  </form>
+</dialog>
+
+<!-- ===== GRAFIK DETAIL ===== -->
+<dialog id="dlgChart">
+  <div class="dlg wide">
+    <div class="card-head"><h2 id="gTitle">Grafik</h2><button class="btn ghost" id="gTutup" aria-label="Tutup">✕</button></div>
+    <p class="hint" id="gSub"></p>
+    <div class="chart-box tall"><canvas id="chDetail"></canvas></div>
+    <details class="tbl-detail"><summary>Lihat angka (tabel)</summary><div class="table-wrap"><table id="tbDetail"></table></div></details>
+  </div>
+</dialog>
+
+<div id="toast" class="toast hidden" role="status"></div>
+</body>
+</html>
