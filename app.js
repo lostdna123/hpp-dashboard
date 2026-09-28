@@ -57,7 +57,7 @@
   /** Panggil Apps Script. Gangguan sesaat dari Google (halaman error HTML / koneksi putus) dicoba ulang otomatis. */
   async function api(body, percobaan) {
     percobaan = percobaan || 1;
-    const MAKS = 3;
+    const MAKS = 4; // Google kadang error beberapa detik (mis. saat deploy versi baru) → jeda 2, 4, 8 detik
     let res, txt;
     try {
       res = await fetch(st.cfg.url, {
@@ -67,12 +67,12 @@
       });
       txt = await res.text();
     } catch (e) {
-      if (percobaan < MAKS) { await new Promise(r => setTimeout(r, 1500 * percobaan)); return api(body, percobaan + 1); }
+      if (percobaan < MAKS) { await new Promise(r => setTimeout(r, 1000 * Math.pow(2, percobaan))); return api(body, percobaan + 1); }
       throw new Error('Tidak bisa menghubungi Google (' + e.message + '). Cek internet, lalu klik Refresh.');
     }
     let out;
     try { out = JSON.parse(txt); } catch (e) {
-      if (percobaan < MAKS) { await new Promise(r => setTimeout(r, 1500 * percobaan)); return api(body, percobaan + 1); }
+      if (percobaan < MAKS) { await new Promise(r => setTimeout(r, 1000 * Math.pow(2, percobaan))); return api(body, percobaan + 1); }
       const cuplikan = String(txt || '').replace(/<(style|script)[\s\S]*?<\/\1>/gi, ' ').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 180);
       throw new Error('Google tidak mengirim data (HTTP ' + (res && res.status) + ', sudah dicoba ' + MAKS + '×). ' +
         (cuplikan ? 'Pesan Google: "' + cuplikan + '". ' : 'Responnya kosong. ') + 'Pastikan URL berakhiran /exec, lalu coba lagi beberapa saat.');
@@ -1579,7 +1579,7 @@
     st.chat.push({ role: 'user', content: teks }); st.chatErr = null; st.chatSibuk = true;
     $('#chatInput').value = ''; ukurInput(); renderChat();
     try {
-      const out = await api({ api: 'chat', model: $('#chatModel').value, konteks: konteksChat(), messages: st.chat.slice(-16).map(m => ({ role: m.role, content: m.content })) }, 3); // tanpa coba-ulang: jangan tertagih dua kali
+      const out = await api({ api: 'chat', model: $('#chatModel').value, konteks: konteksChat(), messages: st.chat.slice(-16).map(m => ({ role: m.role, content: m.content })) }, 4); // tanpa coba-ulang: jangan tertagih dua kali
       const u = out.usage || {}, h = HARGA[out.model] || [1, 5];
       const usd = ((u.input_tokens || 0) * h[0] + (u.cache_creation_input_tokens || 0) * h[0] * 1.25 + (u.cache_read_input_tokens || 0) * h[0] * 0.1 + (u.output_tokens || 0) * h[1]) / 1e6;
       st.chat.push({ role: 'assistant', content: out.teks || '(jawaban kosong)',
