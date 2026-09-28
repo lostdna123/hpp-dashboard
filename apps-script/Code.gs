@@ -251,6 +251,31 @@ function setApiKeyClaude() {
 
 function prop_(k) { return PropertiesService.getScriptProperties().getProperty(k); }
 
+/**
+ * Jalankan sekali dari menu 🍜 HPP: memunculkan pop-up izin Google untuk "menghubungi layanan luar"
+ * (dibutuhkan Analisis AI) dan mengecek apakah API key Claude valid. Tidak memakai token.
+ */
+function tesKoneksiClaude() {
+  let ui = null;
+  try { ui = SpreadsheetApp.getUi(); } catch (e) {}
+  const key = prop_('ANTHROPIC_API_KEY');
+  let pesan;
+  if (!key) {
+    UrlFetchApp.fetch('https://api.anthropic.com/v1/models', { muteHttpExceptions: true }); // cukup untuk memicu izin
+    pesan = 'Izin koneksi luar sudah aktif. Tapi API key Claude belum di-set: menu 🍜 HPP > Set API key Claude.';
+  } else {
+    const res = UrlFetchApp.fetch('https://api.anthropic.com/v1/models', {
+      headers: { 'x-api-key': key, 'anthropic-version': '2023-06-01' }, muteHttpExceptions: true
+    });
+    const kode = res.getResponseCode();
+    pesan = kode === 200 ? '✅ Koneksi ke Claude OK. Tombol Analisis AI di dashboard sudah bisa dipakai.'
+      : kode === 401 ? '❌ API key Claude ditolak (401). Cek lagi key-nya di console.anthropic.com lalu set ulang.'
+      : '⚠️ Claude menjawab kode ' + kode + ': ' + res.getContentText().slice(0, 200);
+  }
+  Logger.log(pesan);
+  if (ui) ui.alert(pesan);
+}
+
 function json_(o) {
   return ContentService.createTextOutput(JSON.stringify(o)).setMimeType(ContentService.MimeType.JSON);
 }
@@ -380,6 +405,7 @@ function onOpen() {
     .addSeparator()
     .addItem('🔑 Buat / ganti kunci dashboard', 'buatKunciDashboard')
     .addItem('✨ Set API key Claude (Analisis AI)', 'setApiKeyClaude')
+    .addItem('✨ Tes koneksi Claude', 'tesKoneksiClaude')
     .addSeparator()
     .addSubMenu(ui.createMenu('🧪 Data dummy (uji coba)')
       .addItem('Isi data dummy 6 bulan', 'isiDataDummy')
