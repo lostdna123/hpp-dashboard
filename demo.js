@@ -154,6 +154,34 @@
       });
     });
 
+    // ===== pembelian non-bahan (tab Pembelian di app HP; tidak masuk HPP) =====
+    // [barang, kategori, satuan, harga, qty maks, peluang per hari]
+    const BARANG = [
+      ['Sabun cuci piring 5 L', 'Kebersihan', 'jerigen', 65000, 2, 0.10], ['Tisu makan', 'Perlengkapan makan & saji', 'pack', 18000, 10, 0.12],
+      ['Plastik sampah besar', 'Kebersihan', 'pack', 25000, 3, 0.08], ['Sumpit kayu', 'Perlengkapan makan & saji', 'pack', 32000, 4, 0.07],
+      ['Kertas struk thermal', 'ATK & printing', 'roll', 9000, 20, 0.04], ['Parkir & bensin belanja', 'Transport & parkir', 'kali', 35000, 1, 0.25],
+      ['Spons & sabut', 'Kebersihan', 'pack', 15000, 3, 0.05], ['Mangkok melamin', 'Peralatan dapur', 'pcs', 28000, 12, 0.015],
+      ['Lampu LED', 'Perbaikan kecil', 'pcs', 45000, 4, 0.02], ['Galon air minum staf', 'Lain-lain', 'galon', 22000, 4, 0.10]
+    ];
+    const DARI = ['Kas outlet (tunai)', 'Kas outlet (tunai)', 'Kas outlet (tunai)', 'Uang pribadi (reimburse)', 'Transfer / kartu HO'];
+    const pembelian = [];
+    let nBeli = 0;
+    for (let d = new Date(mulai); d <= akhir; d.setUTCDate(d.getUTCDate() + 1)) {
+      const tgl = iso(d), bulan = tgl.slice(0, 7);
+      stores.forEach(s => {
+        const idK = 'P' + (++nBeli);
+        let urut = 0;
+        const dari = DARI[Math.floor(rnd() * DARI.length)];
+        BARANG.forEach(([barang, kategori, satuan, harga, maks, peluang]) => {
+          if (rnd() >= peluang) return;
+          const qty = Math.max(1, Math.round(rnd() * maks));
+          const h = Math.round(harga * noise(0.08) / 500) * 500;
+          pembelian.push({ tgl, bulan, brand: s.brand, store: s.kode, pic: 'Demo', kategori, barang, qty, satuan, harga: h, total: qty * h,
+            dibayarDari: dari, toko: 'Toko dummy', catatan: '', foto: '', id: idK + '-' + (++urut) });
+        });
+      });
+    }
+
     return {
       demo: true,
       namaFile: 'DATA DEMO (fiktif)',
@@ -161,7 +189,7 @@
       batasFoodCost: 0.35,
       stores: stores.map(({ kode, brand, nama, aktif }) => ({ kode, brand, nama, aktif })),
       bahan: Object.keys(H).map(n => ({ nama: n, kategori: H[n][0], satuan: H[n][1], brand: 'Semua', acuan: 0 })),
-      belanja, omzet, biaya, rincianKaryawan, rincianTetap
+      belanja, omzet, pembelian, biaya, rincianKaryawan, rincianTetap
     };
   }
 

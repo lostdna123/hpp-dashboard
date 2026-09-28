@@ -45,7 +45,7 @@
     <button role="tab" data-tab="outlet">Outlet</button>
     <button role="tab" data-tab="penjualan">Penjualan</button>
     <button role="tab" data-tab="profit">Profit</button>
-    <button role="tab" data-tab="bahan">Belanja &amp; Bahan</button>
+    <button role="tab" data-tab="bahan">Belanja &amp; Pembelian</button>
     <button role="tab" data-tab="anomali">Anomali <span class="count" id="cntAnomali"></span></button>
   </nav>
 
@@ -140,6 +140,7 @@
           <li><b>MASTER_KARYAWAN</b>: 1 baris per karyawan (outlet, nama, jabatan, gaji, tunjangan, BPJS).</li>
           <li><b>BIAYA_TETAP</b>: sewa (÷12 kalau bayar tahunan), internet, POS, dll per bulan.</li>
           <li><b>BIAYA_BULANAN</b>: listrik, air, perbaikan, marketing, komisi ojol, dll per bulan.</li>
+          <li>Pembelian kecil dari outlet (sabun, tisu, alat, parkir) otomatis masuk dari tab <b>Pembelian</b> di app HP.</li>
         </ul>
         <p class="hint">Sementara itu, tabel di bawah menampilkan laba kotor (omzet − bahan).</p>
       </div>
@@ -178,8 +179,19 @@
         <div class="table-wrap"><table id="tbItem"></table></div>
       </div>
       <div class="card">
+        <div class="card-head"><h2>Pembelian non-bahan</h2><span class="hint">peralatan, kebersihan, ATK, dll · tidak masuk food cost, tapi mengurangi laba</span></div>
+        <div class="grid2 inner">
+          <div class="table-wrap"><table id="tbBeliKat"></table></div>
+          <div class="table-wrap"><table id="tbBeliDari"></table></div>
+        </div>
+        <div class="card-head sub"><h3>Riwayat pembelian</h3><input id="qBeli" type="search" placeholder="Cari barang, outlet, PIC, toko…" aria-label="Cari riwayat pembelian"></div>
+        <p class="hint" id="beliInfo"></p>
+        <div class="table-wrap"><table id="tbBeliLog" class="log"></table></div>
+        <button class="btn ghost more hidden" id="btnBeliMore">Tampilkan lebih banyak</button>
+      </div>
+      <div class="card">
         <div class="card-head">
-          <h2>Riwayat belanja</h2>
+          <h2>Riwayat belanja bahan</h2>
           <input id="qLog" type="search" placeholder="Cari bahan, outlet, PIC, supplier…" aria-label="Cari riwayat belanja">
         </div>
         <p class="hint" id="logInfo"></p>

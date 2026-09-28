@@ -325,6 +325,8 @@
         if (r.kelompok === 'Karyawan') karySB.set(k, (karySB.get(k) || 0) + r.jumlah);
         if (r.kelompok !== 'Operasional') lengkapSB.add(k);
       });
+      // pembelian non-bahan juga biaya (sama seperti perhitungan laba di dashboard)
+      (data.pembelian || []).forEach(r => { const k = r.store + '|' + r.bulan; biayaSB.set(k, (biayaSB.get(k) || 0) + r.total); });
       const marginSB = new Map();
       omzetSB.forEach((o, k) => { if (o > 0 && lengkapSB.has(k)) marginSB.set(k, (o - (belanjaSB.get(k) || 0) - (biayaSB.get(k) || 0)) / o); });
       marginSB.forEach((mg, k) => {

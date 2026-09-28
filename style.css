@@ -214,3 +214,8 @@ a{color:var(--accent)}
 .kosong{color:var(--muted);font-size:14px;padding:6px 0}
 
 @media (max-width:900px){ .grid2{grid-template-columns:minmax(0,1fr)} .grid2 > .card{margin-bottom:0} .grid2{gap:12px;margin-bottom:12px} }
+/* pembelian non-bahan */
+.grid2.inner{grid-template-columns:minmax(0,1.6fr) minmax(0,1fr);gap:16px;margin-bottom:8px}
+.card-head.sub{margin-top:14px}
+.card-head.sub h3{margin:0;font-size:15px;color:var(--ink)}
+@media (max-width:900px){ .grid2.inner{grid-template-columns:minmax(0,1fr)} }

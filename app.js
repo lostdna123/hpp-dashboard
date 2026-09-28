@@ -42,7 +42,7 @@
   const st = {
     cfg: load(K.cfg, { url: '', key: '', demo: false }),
     data: null, anomali: [], scope: null,
-    tab: 'ringkasan', dim: 'semua', q: '', qLog: '', logLimit: 100, charts: {}
+    tab: 'ringkasan', dim: 'semua', q: '', qLog: '', logLimit: 100, qBeli: '', beliLimit: 50, charts: {}
   };
   const JENIS_LABEL = { item: 'Per bahan', store: 'Per outlet', bulan: 'Per bulan', data: 'Kualitas data' };
   const LEVEL = { tinggi: ['▲', 'Tinggi'], sedang: ['●', 'Sedang'], rendah: ['○', 'Rendah'] };
@@ -70,6 +70,8 @@
       belanja: raw.belanja.map(r => ({ tgl: r[0], bulan: r[1], brand: r[2], store: r[3], pic: r[4], kategori: r[5], bahan: r[6], qty: r[7], satuan: r[8],
         harga: r[9], total: r[10], supplier: r[11], flag: r[12], id: r[13], catatan: r[15] || '', foto: r[16] || '' })),
       omzet: raw.omzet.map(r => ({ tgl: r[0], bulan: r[1], brand: r[2], store: r[3], omzet: r[4], struk: r[5] })),
+      pembelian: (raw.pembelian || []).map(r => ({ tgl: r[0], bulan: r[1], brand: r[2], store: r[3], pic: r[4], kategori: r[5], barang: r[6], qty: r[7], satuan: r[8],
+        harga: r[9], total: r[10], dibayarDari: r[11], toko: r[12], catatan: r[13] || '', foto: r[14] || '', id: r[15] })),
       biaya: (raw.biaya || []).map(r => ({ bulan: r[0], store: r[1], kelompok: r[2], kategori: r[3], jumlah: Number(r[4]) || 0, orang: Number(r[5]) || 0 }))
     };
   }
@@ -197,14 +199,17 @@
     const by = (D.biaya || []).filter(inR).map(r => Object.assign({}, r, {
       jumlah: r.bulan === bulanIni && r.kelompok !== 'Operasional' ? r.jumlah * faktorBerjalan : r.jumlah
     }));
+    // pembelian non-bahan (tab Pembelian di app HP): bukan HPP, tapi biaya → ikut mengurangi laba
+    groupBy((D.pembelian || []).filter(inR), r => r.bulan + '|' + r.store + '|' + r.kategori).forEach(rs =>
+      by.push({ bulan: rs[0].bulan, store: rs[0].store, kelompok: 'Pembelian', kategori: rs[0].kategori, jumlah: sum(rs.map(r => r.total)), orang: 0 }));
     const kel = k => sum(by.filter(r => r.kelompok === k).map(r => r.jumlah));
-    const kary = kel('Karyawan'), tetap = kel('Tetap'), ops = kel('Operasional');
-    const laba = omz - hpp - kary - tetap - ops;
+    const kary = kel('Karyawan'), tetap = kel('Tetap'), ops = kel('Operasional'), pemb = kel('Pembelian');
+    const laba = omz - hpp - kary - tetap - ops - pemb;
     return {
-      omz, hpp, kary, tetap, ops, laba, lk: omz - hpp, by,
+      omz, hpp, kary, tetap, ops, pemb, laba, lk: omz - hpp, by,
       margin: omz > 0 ? laba / omz : null, lkPct: omz > 0 ? (omz - hpp) / omz : null, fc: omz > 0 ? hpp / omz : null,
       karyPct: omz > 0 ? kary / omz : null,
-      adaBiaya: by.some(r => r.kelompok !== 'Operasional')
+      adaBiaya: by.some(r => r.kelompok === 'Karyawan' || r.kelompok === 'Tetap')
     };
   }
   const plScope = (sc, dari, sampai) => hitungPL(s => inStore(sc, s), dari, sampai);
@@ -343,7 +348,7 @@
         return '<tr><td><b>' + labelBulan(b) + '</b>' + (b === today().slice(0, 7) ? ' <span class="hint">(berjalan)</span>' : '') + '</td>' +
           '<td class="n">' + rp(p.omz) + '</td><td class="n">' + chgHtml(chg(p.omz, pPrev.omz), true) + '</td><td class="n">' + rp(p.hpp) + '</td>' +
           '<td class="n' + (p.fc > batas ? ' over' : '') + '">' + pct(p.fc) + '</td><td class="n">' + (p.adaBiaya ? rp(p.kary) : '–') + '</td>' +
-          '<td class="n">' + (p.adaBiaya || p.ops ? rp(p.tetap + p.ops) : '–') + '</td>' +
+          '<td class="n">' + (p.adaBiaya || p.ops || p.pemb ? rp(p.tetap + p.ops + p.pemb) : '–') + '</td>' +
           '<td class="n' + (p.adaBiaya && p.laba < 0 ? ' neg' : '') + '">' + (p.adaBiaya ? rp(p.laba) : '–') + '</td>' +
           '<td class="n"><b>' + (p.adaBiaya ? pct(p.margin) : '–') + '</b></td><td class="n">' + (a.struk ? num(a.struk, 0) : '–') + '</td></tr>';
       }).join('') + '</tbody>';
@@ -436,6 +441,7 @@
     return '<thead><tr><th>Pos</th><th class="n">Rupiah</th><th class="n">% omzet</th></tr></thead><tbody>' +
       b('Omzet', p.omz) + b('− HPP bahan baku', -p.hpp) + b('<b>Laba kotor</b>', p.lk) +
       (p.adaBiaya ? b('− Karyawan', -p.kary) + b('− Biaya tetap (sewa, dll)', -p.tetap) + b('− Biaya bulanan (listrik, dll)', -p.ops) : '') +
+      (p.pemb ? b('− Pembelian lain (non-bahan)', -p.pemb) : '') +
       '</tbody><tfoot><tr><td>Laba operasional</td><td class="n' + (p.laba < 0 ? ' neg' : '') + '">' + (p.adaBiaya ? rp(p.laba) : '–') + '</td><td class="n' + (p.margin < 0 ? ' neg' : '') + '">' + (p.adaBiaya ? pct(p.margin) : 'isi biaya') + '</td></tr></tfoot>';
   }
 
@@ -505,17 +511,18 @@
     const td = (v, neg) => '<td class="n' + (neg && v < 0 ? ' neg' : '') + '">' + (v == null ? '–' : rp(v)) + '</td>';
     const tdp = (v, neg) => '<td class="n' + (neg && v < 0 ? ' neg' : '') + '">' + pct(v) + '</td>';
     const baris = (r, label) => '<td>' + label + '</td>' + td(r.omz) + td(r.hpp) + td(r.lk, true) + tdp(r.lkPct) +
-      td(r.kary) + td(r.tetap) + td(r.ops) + td(r.adaBiaya ? r.laba : null, true) + tdp(r.adaBiaya ? r.margin : null, true) + tdp(r.adaBiaya ? r.karyPct : null);
+      td(r.kary) + td(r.tetap) + td(r.ops) + td(r.pemb) + td(r.adaBiaya ? r.laba : null, true) + tdp(r.adaBiaya ? r.margin : null, true) + tdp(r.adaBiaya ? r.karyPct : null);
     $('#tbProfit').innerHTML = '<thead><tr><th>Outlet</th><th class="n">Omzet</th><th class="n">HPP bahan</th><th class="n">Laba kotor</th><th class="n">%</th>' +
-      '<th class="n">Karyawan</th><th class="n">Biaya tetap</th><th class="n">Biaya bulanan</th><th class="n">Laba operasional</th><th class="n">Margin</th><th class="n">Karyawan %</th></tr></thead><tbody>' +
+      '<th class="n">Karyawan</th><th class="n">Biaya tetap</th><th class="n">Biaya bulanan</th><th class="n">Pembelian lain</th><th class="n">Laba operasional</th><th class="n">Margin</th><th class="n">Karyawan %</th></tr></thead><tbody>' +
       rows.map(r => '<tr class="klik" data-s="' + esc(r.s.kode) + '">' + baris(r, '<span class="sw" style="background:' + W[r.s.kode] + '"></span><b>' + esc(r.s.kode) + '</b> ' + esc(r.s.nama)) + '</tr>').join('') +
       '</tbody><tfoot><tr>' + baris(total, 'Total ' + (sc.storeSet ? 'outlet dipilih' : 'semua outlet')) + '</tr></tfoot>';
     $$('#tbProfit tr.klik').forEach(tr => tr.addEventListener('click', () => bukaRincian(tr.dataset.s)));
 
     // biaya per pos (gabungan outlet terpilih)
     const pos = [['HPP bahan baku', 'Bahan', total.hpp]];
-    ['Karyawan', 'Tetap', 'Operasional'].forEach(k => {
-      groupBy(total.by.filter(r => r.kelompok === k), r => r.kategori).forEach((rs, kat) => pos.push([kat, k === 'Tetap' ? 'Tetap' : k === 'Operasional' ? 'Bulanan' : 'Karyawan', sum(rs.map(r => r.jumlah))]));
+    const LBL = { Karyawan: 'Karyawan', Tetap: 'Tetap', Operasional: 'Bulanan', Pembelian: 'Pembelian lain' };
+    ['Karyawan', 'Tetap', 'Operasional', 'Pembelian'].forEach(k => {
+      groupBy(total.by.filter(r => r.kelompok === k), r => r.kategori).forEach((rs, kat) => pos.push([kat, LBL[k], sum(rs.map(r => r.jumlah))]));
     });
     pos.sort((x, y) => y[2] - x[2]);
     $('#tbPos').innerHTML = '<thead><tr><th>Pos biaya</th><th>Kelompok</th><th class="n">Rupiah</th><th class="n">% omzet</th></tr></thead><tbody>' +
@@ -528,7 +535,7 @@
     const p = plOutlet(kode, sc.dari, sc.sampai);
     const pos = [['HPP bahan baku', p.hpp], ['Karyawan (total)', p.kary]];
     const perKat = kelompok => [...groupBy(p.by.filter(r => r.kelompok === kelompok), r => r.kategori).entries()].map(([k, rs]) => [k, sum(rs.map(r => r.jumlah))]).sort((a, b) => b[1] - a[1]);
-    perKat('Tetap').concat(perKat('Operasional')).forEach(x => pos.push(x));
+    perKat('Tetap').concat(perKat('Operasional'), perKat('Pembelian').map(x => [x[0] + ' (pembelian)', x[1]])).forEach(x => pos.push(x));
     $('#gTitle').textContent = 'Struktur biaya ' + kode + ' · ' + labelBulan(sc.dari) + (sc.dari !== sc.sampai ? '–' + labelBulan(sc.sampai) : '');
     $('#gSub').textContent = (s ? s.nama + ' · ' : '') + 'Semua biaya sebagai % dari omzet ' + rp(p.omz) + '. Laba operasional ' + rp(p.laba) + ' (' + pct(p.margin) + ').';
     const d = $('#dlgChart'); if (!d.open) d.showModal();
@@ -560,7 +567,38 @@
     $('#fcNote').textContent = 'garis putus-putus = batas ' + pct(batas, 0);
     renderItemTabel();
     renderLog();
+    renderPembelian();
   }
+
+  function renderPembelian() {
+    const sc = st.scope, D = st.data, q = st.qBeli;
+    const inR = (r, dari, sampai) => r.bulan >= dari && r.bulan <= sampai && inStore(sc, r.store);
+    const cur = (D.pembelian || []).filter(r => inR(r, sc.dari, sc.sampai)), prev = (D.pembelian || []).filter(r => inR(r, sc.prevDari, sc.prevSampai));
+    const omz = agScope(sc, sc.dari, sc.sampai).omz, tot = sum(cur.map(r => r.total));
+    const gp = groupBy(prev, r => r.kategori);
+    const kat = [...groupBy(cur, r => r.kategori).entries()].map(([k, rs]) => ({ k, n: rs.length, t: sum(rs.map(r => r.total)), tp: sum((gp.get(k) || []).map(r => r.total)) }))
+      .sort((a, b) => b.t - a.t);
+    $('#tbBeliKat').innerHTML = '<thead><tr><th>Kategori</th><th class="n">Transaksi</th><th class="n">Rupiah</th><th class="n">% omzet</th><th class="n">vs sebelumnya</th></tr></thead><tbody>' +
+      (kat.length ? kat.map(x => '<tr><td>' + esc(x.k) + '</td><td class="n">' + x.n + '</td><td class="n">' + rp(x.t) + '</td><td class="n">' + pct(omz ? x.t / omz : null) + '</td><td class="n">' + chgHtml(chg(x.t, x.tp), false) + '</td></tr>').join('')
+        : '<tr><td colspan="5" class="hint">Belum ada pembelian non-bahan di periode ini. Tim outlet mengisinya di tab Pembelian app HP.</td></tr>') +
+      '</tbody>' + (kat.length ? '<tfoot><tr><td>Total</td><td class="n">' + cur.length + '</td><td class="n">' + rp(tot) + '</td><td class="n">' + pct(omz ? tot / omz : null) + '</td><td class="n">' + chgHtml(chg(tot, sum(prev.map(r => r.total))), false) + '</td></tr></tfoot>' : '');
+    const dari = [...groupBy(cur, r => r.dibayarDari || '(kosong)').entries()].map(([k, rs]) => [k, sum(rs.map(r => r.total))]).sort((a, b) => b[1] - a[1]);
+    $('#tbBeliDari').innerHTML = '<thead><tr><th>Dibayar dari</th><th class="n">Rupiah</th><th class="n">Porsi</th></tr></thead><tbody>' +
+      (dari.length ? dari.map(x => '<tr><td>' + esc(x[0]) + '</td><td class="n">' + rp(x[1]) + '</td><td class="n">' + pct(tot ? x[1] / tot : null) + '</td></tr>').join('') : '<tr><td colspan="3" class="hint">–</td></tr>') + '</tbody>';
+
+    const rows = cur.filter(r => !q || [r.barang, r.kategori, r.store, r.pic, r.toko, r.catatan, r.dibayarDari].join(' ').toLowerCase().includes(q))
+      .sort((a, b) => a.tgl < b.tgl ? 1 : a.tgl > b.tgl ? -1 : 0);
+    const tampil = rows.slice(0, st.beliLimit);
+    $('#beliInfo').textContent = rows.length ? 'Menampilkan ' + tampil.length.toLocaleString('id-ID') + ' dari ' + rows.length.toLocaleString('id-ID') + ' baris · total ' + rp(sum(rows.map(r => r.total))) : '';
+    $('#tbBeliLog').innerHTML = '<thead><tr><th>Tanggal</th><th>Outlet</th><th>Barang</th><th>Kategori</th><th class="n">Qty</th><th class="n">Harga</th><th class="n">Total</th><th>Dibayar dari</th><th>PIC</th><th>Toko</th><th>Catatan</th><th>Nota</th></tr></thead><tbody>' +
+      tampil.map(r => '<tr><td>' + esc(r.tgl) + '</td><td>' + esc(r.store) + '</td><td>' + esc(r.barang) + '</td><td>' + esc(r.kategori) + '</td>' +
+        '<td class="n">' + num(r.qty, 2) + ' ' + esc(r.satuan) + '</td><td class="n">' + rp(r.harga) + '</td><td class="n">' + rp(r.total) + '</td>' +
+        '<td>' + esc(r.dibayarDari || '') + '</td><td>' + esc(r.pic) + '</td><td>' + esc(r.toko || '') + '</td><td>' + esc(r.catatan || '') + '</td>' +
+        '<td>' + (r.foto && /^https:\/\//.test(r.foto) ? '<a href="' + esc(r.foto) + '" target="_blank" rel="noopener">📷 lihat</a>' : '') + '</td></tr>').join('') + '</tbody>';
+    $('#btnBeliMore').classList.toggle('hidden', rows.length <= tampil.length);
+  }
+  $('#qBeli').addEventListener('input', e => { st.qBeli = e.target.value.toLowerCase(); st.beliLimit = 50; renderPembelian(); });
+  $('#btnBeliMore').addEventListener('click', () => { st.beliLimit += 200; renderPembelian(); });
 
   function renderItemTabel() {
     const sc = st.scope;
@@ -753,7 +791,7 @@
       const p = plOutlet(s.kode, sc.dari, sc.sampai), pp = plOutlet(s.kode, sc.prevDari, sc.prevSampai), x = agregat(k => k === s.kode, sc.dari, sc.sampai);
       if (!p.omz) return;
       baris.push('- ' + s.kode + ' (' + s.brand + '): omzet ' + rpS(p.omz) + ' (' + (chg(p.omz, pp.omz) == null ? 'n/a' : (chg(p.omz, pp.omz) >= 0 ? '+' : '') + pct(chg(p.omz, pp.omz), 0)) + ') | bahan ' + pct(p.fc) +
-        (p.adaBiaya ? ' | karyawan ' + pct(p.karyPct) + ' | tetap/sewa ' + pct(p.tetap / p.omz) + ' | bulanan ' + pct(p.ops / p.omz) + ' | margin ' + pct(p.margin) : ' | biaya belum diisi') +
+        (p.adaBiaya ? ' | karyawan ' + pct(p.karyPct) + ' | tetap/sewa ' + pct(p.tetap / p.omz) + ' | bulanan ' + pct(p.ops / p.omz) + ' | pembelian non-bahan ' + pct(p.pemb / p.omz) + ' | margin ' + pct(p.margin) : ' | biaya belum diisi') +
         (x.ticket ? ' | per struk ' + rpS(x.ticket) : ''));
     });
     if (plT.adaBiaya) {

@@ -36,7 +36,7 @@ button,input,select{font:inherit;color:inherit}
 .who .sub{color:var(--muted);font-size:13px}
 .ghost{background:none;border:1px solid var(--line);border-radius:10px;padding:8px 12px;font-size:14px;cursor:pointer}
 .tabs{display:flex;gap:6px;margin-top:10px;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:4px}
-.tabs button{flex:1;border:0;background:none;padding:10px 4px;border-radius:9px;font-weight:600;color:var(--muted);cursor:pointer}
+.tabs button{flex:1;border:0;background:none;padding:10px 2px;border-radius:9px;font-weight:600;font-size:15px;color:var(--muted);cursor:pointer;white-space:nowrap}
 .tabs button.on{background:var(--pri-soft);color:var(--pri)}
 .badge{display:inline-block;min-width:20px;padding:1px 6px;border-radius:99px;background:var(--err);color:#fff;font-size:12px;margin-left:4px}
 
@@ -113,6 +113,12 @@ input.big{font-size:22px;font-weight:700}
 .toast.warn{background:var(--warn-soft);color:var(--warn);border:1px solid var(--warn)}
 .toast.err{background:var(--err);color:#fff}
 
+.pgrid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}
+.pgrid label + label{margin-top:0}
+.pgrid input,.pgrid select{padding:10px}
+.pitem .itop input{margin-top:0;font-weight:600}
+.tip{margin-top:12px;padding:10px 12px;border-radius:10px;background:var(--pri-soft);color:var(--ink);font-size:13px}
+@media (max-width:380px){ .tabs button{font-size:14px} }
 @media (max-width:380px){ .igrid{grid-template-columns:1fr 1fr} .igrid label:last-child{grid-column:1 / -1} }
 </style>
 </head>
@@ -131,7 +137,8 @@ input.big{font-size:22px;font-weight:700}
     <div id="ribDemo" class="ribbon warn hidden">Mode demo — data tidak dikirim. Versi asli dibuka lewat URL web app Google.</div>
     <div id="ribNet" class="ribbon err hidden"></div>
     <nav class="tabs">
-      <button data-tab="belanja" class="on">Belanja</button>
+      <button data-tab="belanja" class="on">Bahan</button>
+      <button data-tab="pembelian">Pembelian</button>
       <button data-tab="omzet">Omzet</button>
       <button data-tab="riwayat">Riwayat<span id="qBadge" class="badge hidden">0</span></button>
     </nav>
@@ -152,6 +159,7 @@ input.big{font-size:22px;font-weight:700}
     <div id="items"></div>
     <button class="add" id="btnAdd">+ Tambah bahan</button>
     <p class="hint">Bahan nggak ada di daftar? Minta HO tambahin di sheet MASTER_BAHAN, lalu buka ulang app.</p>
+    <p class="tip">Tab ini khusus <b>bahan baku</b> (masuk HPP / food cost). Beli sabun, tisu, alat dapur, ATK, parkir, dll → tab <b>Pembelian</b>.</p>
 
     <div class="card">
       <label>Foto nota (opsional)</label>
@@ -167,6 +175,39 @@ input.big{font-size:22px;font-weight:700}
     <div class="bar"><div class="wrap">
       <div class="total"><span id="bCount">0 bahan</span><b id="bTotal">Rp 0</b></div>
       <button class="primary" id="btnKirimB">Kirim belanja</button>
+    </div></div>
+  </section>
+
+  <!-- ========== PEMBELIAN (non-bahan) ========== -->
+  <section id="tab-pembelian" class="hidden">
+    <div class="card">
+      <div class="row2">
+        <label>Tanggal beli<input type="date" id="pTgl"></label>
+        <label>Dibayar dari<select id="pDari"></select></label>
+      </div>
+      <label>Toko / supplier<input id="pToko" placeholder="opsional, mis. Indomaret"></label>
+    </div>
+
+    <div class="section-title"><b>Barang yang dibeli</b><span>bukan bahan baku</span></div>
+    <div id="pItems"></div>
+    <datalist id="dlBarang"></datalist>
+    <button class="add" id="pAdd">+ Tambah barang</button>
+    <p class="hint">Untuk barang non-bahan: peralatan dapur, perlengkapan saji, kebersihan, ATK, perbaikan kecil, transport/parkir. Tidak dihitung ke food cost, tapi tetap mengurangi laba & kas.</p>
+
+    <div class="card">
+      <label>Foto nota (opsional)</label>
+      <label class="fotoBtn" for="pFoto" id="pFotoBtn">📷 Foto nota</label>
+      <input type="file" id="pFoto" accept="image/*" capture="environment" hidden>
+      <div class="fotoPrev hidden" id="pFotoPrev">
+        <img id="pFotoImg" alt="Foto nota">
+        <button class="ghost" id="pFotoDel">Hapus foto</button>
+      </div>
+      <label>Catatan<input id="pCatatan" placeholder="opsional, mis. mangkok pecah 3"></label>
+    </div>
+
+    <div class="bar"><div class="wrap">
+      <div class="total"><span id="pCount">0 barang</span><b id="pTotal">Rp 0</b></div>
+      <button class="primary" id="btnKirimP">Kirim pembelian</button>
     </div></div>
   </section>
 
@@ -217,7 +258,7 @@ input.big{font-size:22px;font-weight:700}
 <script>
 /* ============ KONFIG & UTIL ============ */
 const IS_GAS = typeof google !== 'undefined' && google.script && google.script.run;
-const K = { cfg: 'hpp.cfg', master: 'hpp.master', queue: 'hpp.queue', hist: 'hpp.hist' };
+const K = { cfg: 'hpp.cfg', master: 'hpp.master', queue: 'hpp.queue', hist: 'hpp.hist', barang: 'hpp.barang', dari: 'hpp.dari' };
 
 const $ = s => document.querySelector(s);
 const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -273,8 +314,14 @@ const DEMO = {
     ['Kimchi', 'Saus & Bumbu Jadi', 'kg', 'Uri Gukbap', 0], ['Gochujang', 'Saus & Bumbu Jadi', 'kg', 'Uri Gukbap', 0],
     ['Minyak goreng', 'Saus & Bumbu Jadi', 'liter', 'Semua', 0], ['Gas LPG 12 kg', 'Operasional & Packaging', 'tabung', 'Semua', 0]
   ].map(r => ({ nama: r[0], kategori: r[1], satuan: r[2], brand: r[3], acuan: r[4] })),
-  hargaTerakhir: { 'Daging babi samcan': { harga: 118000, satuan: 'kg' }, 'Cabe hijau': { harga: 36000, satuan: 'kg' } }
+  hargaTerakhir: { 'Daging babi samcan': { harga: 118000, satuan: 'kg' }, 'Cabe hijau': { harga: 36000, satuan: 'kg' } },
+  barangPembelian: [{ nama: 'Sabun cuci piring 5 L', kategori: 'Kebersihan', satuan: 'jerigen' }, { nama: 'Tisu makan', kategori: 'Perlengkapan makan & saji', satuan: 'pack' },
+    { nama: 'Parkir & bensin belanja', kategori: 'Transport & parkir', satuan: 'kali' }]
 };
+// dipakai kalau data master di HP masih versi lama (belum ada daftar dari server)
+const KAT_PEMBELIAN = ['Peralatan dapur', 'Perlengkapan makan & saji', 'Kebersihan', 'ATK & printing', 'Perbaikan kecil',
+  'Transport & parkir', 'Perlengkapan toko', 'Lain-lain'];
+const DIBAYAR_DARI = ['Kas outlet (tunai)', 'Uang pribadi (reimburse)', 'Transfer / kartu HO'];
 function demo(fn, args) {
   return new Promise((res, rej) => setTimeout(() => {
     if (fn === 'getMasterData') return res(DEMO);
@@ -289,7 +336,7 @@ function demo(fn, args) {
 /* ============ STATE ============ */
 let cfg = load(K.cfg, null);
 let master = load(K.master, null);
-let fotoData = null;
+let fotoData = null, pFotoData = null;
 const itemsEl = $('#items');
 
 /* ============ HEADER & TABS ============ */
@@ -306,7 +353,7 @@ function renderHeader() {
 }
 document.querySelectorAll('.tabs button').forEach(b => b.addEventListener('click', () => {
   document.querySelectorAll('.tabs button').forEach(x => x.classList.toggle('on', x === b));
-  ['belanja', 'omzet', 'riwayat'].forEach(t => $('#tab-' + t).classList.toggle('hidden', t !== b.dataset.tab));
+  ['belanja', 'pembelian', 'omzet', 'riwayat'].forEach(t => $('#tab-' + t).classList.toggle('hidden', t !== b.dataset.tab));
   if (b.dataset.tab === 'riwayat') { renderQueue(); renderHist(); }
   window.scrollTo(0, 0);
 }));
@@ -367,6 +414,7 @@ async function refreshMaster() {
     if (!master) { $('#ribNet').textContent = 'Gagal ambil data master (' + errMsg(e) + '). Cek sinyal lalu buka ulang.'; $('#ribNet').classList.remove('hidden'); }
   }
   refreshBahanSelects();
+  refreshPembelianLists();
 }
 function bahanUntukBrand() {
   if (!master) return [];
@@ -498,22 +546,115 @@ function compress(file, max, q) {
     img.onerror = rej; img.src = url;
   });
 }
-$('#bFoto').addEventListener('change', async e => {
-  const f = e.target.files && e.target.files[0];
-  if (!f) return;
-  try {
-    const dataUrl = await compress(f, 1280, 0.7);
-    fotoData = { data: dataUrl.split(',')[1], mimeType: 'image/jpeg' };
-    $('#fotoImg').src = dataUrl;
-    $('#fotoPrev').classList.remove('hidden'); $('#fotoBtn').classList.add('hidden');
-  } catch (err) { toast('Foto gagal diproses, coba lagi', 'err'); }
-  e.target.value = '';
-});
-function clearFoto() {
-  fotoData = null; $('#fotoImg').removeAttribute('src');
-  $('#fotoPrev').classList.add('hidden'); $('#fotoBtn').classList.remove('hidden');
+/** Pasang input foto nota. ids = { input, btn, prev, img, del }, set(data) menyimpan hasil. Mengembalikan fungsi hapus. */
+function pasangFoto(ids, set) {
+  const clear = () => {
+    set(null); $(ids.img).removeAttribute('src');
+    $(ids.prev).classList.add('hidden'); $(ids.btn).classList.remove('hidden');
+  };
+  $(ids.input).addEventListener('change', async e => {
+    const f = e.target.files && e.target.files[0];
+    if (!f) return;
+    try {
+      const dataUrl = await compress(f, 1280, 0.7);
+      set({ data: dataUrl.split(',')[1], mimeType: 'image/jpeg' });
+      $(ids.img).src = dataUrl;
+      $(ids.prev).classList.remove('hidden'); $(ids.btn).classList.add('hidden');
+    } catch (err) { toast('Foto gagal diproses, coba lagi', 'err'); }
+    e.target.value = '';
+  });
+  $(ids.del).addEventListener('click', clear);
+  return clear;
 }
-$('#fotoDel').addEventListener('click', clearFoto);
+const clearFoto = pasangFoto({ input: '#bFoto', btn: '#fotoBtn', prev: '#fotoPrev', img: '#fotoImg', del: '#fotoDel' }, v => { fotoData = v; });
+const clearPFoto = pasangFoto({ input: '#pFoto', btn: '#pFotoBtn', prev: '#pFotoPrev', img: '#pFotoImg', del: '#pFotoDel' }, v => { pFotoData = v; });
+
+/* ============ PEMBELIAN (non-bahan) ============ */
+const pItemsEl = $('#pItems');
+const katPembelian = () => (master && master.katPembelian && master.katPembelian.length) ? master.katPembelian : KAT_PEMBELIAN;
+const dibayarDari = () => (master && master.dibayarDari && master.dibayarDari.length) ? master.dibayarDari : DIBAYAR_DARI;
+const katOptionsHtml = () => '<option value="">— Kategori —</option>' + katPembelian().map(k => '<option>' + esc(k) + '</option>').join('');
+function barangDikenal() {
+  const list = ((master && master.barangPembelian) || []).concat(load(K.barang, []));
+  const m = new Map(); list.forEach(b => b && b.nama && m.set(b.nama.toLowerCase(), b));
+  return m;
+}
+function refreshPembelianLists() {
+  const pilih = $('#pDari').value || load(K.dari, '') || dibayarDari()[0];
+  $('#pDari').innerHTML = dibayarDari().map(d => '<option>' + esc(d) + '</option>').join('');
+  $('#pDari').value = dibayarDari().includes(pilih) ? pilih : dibayarDari()[0];
+  $('#dlBarang').innerHTML = [...barangDikenal().values()].map(b => '<option value="' + esc(b.nama) + '">').join('');
+  [...pItemsEl.children].forEach(el => { const s = el.querySelector('.kat'), v = s.value; s.innerHTML = katOptionsHtml(); s.value = v; });
+}
+$('#pDari').addEventListener('change', () => save(K.dari, $('#pDari').value));
+function addPItem(focus) {
+  const el = document.createElement('div');
+  el.className = 'item pitem card';
+  el.innerHTML =
+    '<div class="itop"><span class="no"></span>' +
+      '<input class="barang" list="dlBarang" placeholder="Nama barang, mis. Sabun cuci piring" autocomplete="off" aria-label="Nama barang">' +
+      '<button class="x" title="Hapus baris" aria-label="Hapus baris">✕</button></div>' +
+    '<div class="pgrid">' +
+      '<label>Kategori<select class="kat">' + katOptionsHtml() + '</select></label>' +
+      '<label>Satuan<input class="sat" placeholder="pcs" autocomplete="off"></label>' +
+      '<label>Qty<input class="qty" inputmode="decimal" placeholder="0" autocomplete="off"></label>' +
+      '<label>Harga / satuan<input class="harga" inputmode="numeric" placeholder="0" autocomplete="off"></label>' +
+    '</div>' +
+    '<div class="ifoot"><p class="hint"></p><b class="sub">Rp 0</b></div>';
+  el.querySelector('.x').addEventListener('click', () => {
+    el.remove();
+    if (!pItemsEl.children.length) addPItem();
+    renumberP(); updatePTotal();
+  });
+  const barang = el.querySelector('.barang');
+  barang.addEventListener('change', () => {       // barang yang pernah dibeli → kategori & satuan terisi otomatis
+    const b = barangDikenal().get(barang.value.trim().toLowerCase());
+    if (b) {
+      barang.value = b.nama;
+      if (!el.querySelector('.kat').value && katPembelian().includes(b.kategori)) el.querySelector('.kat').value = b.kategori;
+      if (!el.querySelector('.sat').value && b.satuan) el.querySelector('.sat').value = b.satuan;
+    }
+    refreshPItem(el);
+  });
+  ['input', 'change'].forEach(ev => el.querySelector('.kat').addEventListener(ev, () => refreshPItem(el)));
+  el.querySelector('.qty').addEventListener('input', () => { refreshPItem(el); updatePTotal(); });
+  const h = el.querySelector('.harga');
+  h.addEventListener('input', () => { fmtRpInput(h); refreshPItem(el); updatePTotal(); });
+  pItemsEl.appendChild(el);
+  renumberP(); refreshPItem(el);
+  if (focus) barang.focus();
+  return el;
+}
+function renumberP() { [...pItemsEl.children].forEach((el, i) => { el.querySelector('.no').textContent = i + 1; }); }
+function refreshPItem(el) {
+  const qty = parseQty(el.querySelector('.qty').value), harga = parseRp(el.querySelector('.harga').value);
+  el.querySelector('.sub').textContent = (qty > 0 && harga > 0) ? rp(qty * harga) : 'Rp 0';
+  if (el.querySelector('.barang').value || qty || harga) el.classList.remove('bad');
+}
+function collectPItems() {
+  const rows = [], errs = [];
+  [...pItemsEl.children].forEach((el, i) => {
+    const barang = el.querySelector('.barang').value.trim().replace(/\s+/g, ' ');
+    const kat = el.querySelector('.kat').value, sat = el.querySelector('.sat').value.trim() || 'pcs';
+    const qs = el.querySelector('.qty').value, hs = el.querySelector('.harga').value;
+    el.classList.remove('bad');
+    if (!barang && !qs && !hs) return;
+    const qty = parseQty(qs), harga = parseRp(hs);
+    if (!barang || !kat || !(qty > 0) || !(harga > 0)) { errs.push(i + 1); el.classList.add('bad'); return; }
+    rows.push({ barang: barang, kategori: kat, satuan: sat, qty: qty, harga: harga });
+  });
+  return { rows, errs };
+}
+function updatePTotal() {
+  let n = 0, total = 0;
+  [...pItemsEl.children].forEach(el => {
+    const q = parseQty(el.querySelector('.qty').value), h = parseRp(el.querySelector('.harga').value);
+    if (el.querySelector('.barang').value.trim() && q > 0 && h > 0) { n++; total += q * h; }
+  });
+  $('#pCount').textContent = n + ' barang';
+  $('#pTotal').textContent = rp(total);
+}
+$('#pAdd').addEventListener('click', () => addPItem(true));
 
 /* ============ KIRIM ============ */
 async function kirim(btn, jenis, fn, payload, info, onDone) {
@@ -559,6 +700,30 @@ $('#btnKirimB').addEventListener('click', () => {
     }
     itemsEl.innerHTML = ''; addItem();
     $('#bSupplier').value = ''; $('#bCatatan').value = ''; clearFoto(); updateTotal();
+    window.scrollTo(0, 0);
+  });
+});
+
+$('#btnKirimP').addEventListener('click', () => {
+  if (!cfg) return openSetup();
+  const { rows, errs } = collectPItems();
+  if (errs.length) return toast('Lengkapi barang no. ' + errs.join(', ') + ' (nama, kategori, qty & harga)', 'err');
+  if (!rows.length) return toast('Belum ada barang yang diisi', 'err');
+  const tgl = $('#pTgl').value;
+  if (!tgl) return toast('Isi tanggal beli', 'err');
+  const dari = $('#pDari').value;
+  const total = rows.reduce((s, r) => s + r.qty * r.harga, 0);
+  const payload = {
+    idKiriman: 'P-' + uid(), storeCode: cfg.kode, pin: cfg.pin, pic: cfg.pic, tanggal: tgl, dibayarDari: dari,
+    toko: $('#pToko').value.trim(), catatan: $('#pCatatan').value.trim(), items: rows, foto: pFotoData
+  };
+  const info = { tanggal: tgl, ringkas: rows.length + ' barang · ' + rp(total) + ' · ' + dari.replace(/ \(.*\)/, '') + (pFotoData ? ' · 📷' : '') };
+  kirim($('#btnKirimP'), 'Pembelian', 'submitPembelian', payload, info, () => {
+    const dikenal = load(K.barang, []);
+    rows.forEach(r => dikenal.push({ nama: r.barang, kategori: r.kategori, satuan: r.satuan }));
+    save(K.barang, dikenal.slice(-200));
+    pItemsEl.innerHTML = ''; addPItem();
+    $('#pToko').value = ''; $('#pCatatan').value = ''; clearPFoto(); updatePTotal(); refreshPembelianLists();
     window.scrollTo(0, 0);
   });
 });
@@ -644,9 +809,9 @@ function renderHist() {
 /* ============ INIT ============ */
 (async function init() {
   const t = today();
-  ['#bTgl', '#oTgl'].forEach(s => { $(s).value = t; $(s).max = t; });
+  ['#bTgl', '#pTgl', '#oTgl'].forEach(s => { $(s).value = t; $(s).max = t; });
   if (!IS_GAS) $('#ribDemo').classList.remove('hidden');
-  renderHeader(); addItem(); updateTotal(); renderQueue(); renderHist();
+  renderHeader(); addItem(); updateTotal(); addPItem(); refreshPembelianLists(); updatePTotal(); renderQueue(); renderHist();
   await refreshMaster();
   if (!cfg) openSetup();
   flushQueue();

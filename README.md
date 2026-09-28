@@ -22,7 +22,7 @@ food cost, biaya karyawan, rata-rata per struk, jumlah anomali (semua dibanding 
 | **Outlet** | Kartu tiap outlet → klik untuk detail: omzet harian, margin & food cost per bulan, laba rugi, tim per jabatan, 10 bahan terbesar, anomali outlet itu |
 | **Penjualan** | Omzet harian · rata-rata per hari dalam minggu · rata-rata per struk · tabel penjualan per outlet (hari terbaik) |
 | **Profit** | Margin per outlet per bulan · laba rugi per outlet (klik untuk rincian biaya) · biaya per pos |
-| **Belanja & Bahan** | Belanja per kategori · food cost per outlet · tabel bahan (harga vs periode sebelumnya) · riwayat belanja lengkap (cari, catatan, link foto nota) |
+| **Belanja & Pembelian** | Belanja bahan per kategori · food cost per outlet · tabel bahan (harga vs periode sebelumnya) · pembelian non-bahan per kategori & sumber uang · riwayat belanja & pembelian lengkap (cari, catatan, link foto nota) |
 | **Anomali** | Semua temuan deteksi otomatis, bisa difilter per jenis, tiap kartu ada grafiknya |
 
 Status outlet: **Kritis** kalau rugi atau food cost > batas + 5 poin; **Perlu perhatian** kalau margin < 10%,
@@ -45,11 +45,18 @@ Deteksi butuh histori ±3 bulan supaya perbandingannya adil.
 ## Profit & margin
 
 Tab **Profit** menghitung laba rugi per outlet:
-`Laba operasional = Omzet − HPP bahan − Karyawan − Biaya tetap − Biaya bulanan`, `Margin = Laba operasional ÷ Omzet`.
+`Laba operasional = Omzet − HPP bahan − Karyawan − Biaya tetap − Biaya bulanan − Pembelian lain`, `Margin = Laba operasional ÷ Omzet`.
 Sumbernya 3 sheet yang diisi HO: **MASTER_KARYAWAN** (per nama & jabatan), **BIAYA_TETAP** (sewa, internet, dll per bulan)
 dan **BIAYA_BULANAN** (listrik, air, perbaikan, marketing, komisi ojol, dll). Ke dashboard hanya dikirim total per
 jabatan/kategori — nama & gaji per orang tetap di Google Sheet. Bulan berjalan: biaya karyawan & tetap dihitung
 proporsional dengan hari yang sudah lewat.
+
+## Pembelian non-bahan
+
+Tab **Pembelian** di app HP untuk barang di luar bahan baku (peralatan dapur, perlengkapan saji, kebersihan, ATK,
+perbaikan kecil, transport/parkir). Masuk sheet **INPUT_PEMBELIAN**, terpisah dari INPUT_BELANJA, jadi **tidak
+menaikkan food cost**, tapi tetap mengurangi laba operasional ("Pembelian lain"). Tiap kiriman mencatat
+**Dibayar dari** (kas outlet tunai / uang pribadi-reimburse / transfer HO) sebagai dasar hitung kas bersih nanti.
 
 ## Analisis AI (hemat token)
 

@@ -25,6 +25,7 @@ const CFG = {
   TZ: 'Asia/Jakarta',
   SH_BELANJA: 'INPUT_BELANJA',
   SH_OMZET: 'INPUT_OMZET',
+  SH_PEMBELIAN: 'INPUT_PEMBELIAN',
   SH_STORE: 'MASTER_STORE',
   SH_BAHAN: 'MASTER_BAHAN',
   SH_REKAP: 'REKAP_BULANAN',
@@ -46,6 +47,9 @@ const KOLOM = {
   INPUT_BELANJA: ['ID Baris', 'Waktu Input', 'Tanggal Belanja', 'Bulan', 'Brand', 'Kode Store', 'Nama Store', 'PIC',
     'Kategori', 'Nama Bahan', 'Qty', 'Satuan', 'Harga per Satuan', 'Total', 'Supplier', 'Catatan',
     'Link Foto Nota', 'Flag', 'ID Kiriman'],
+  INPUT_PEMBELIAN: ['ID Baris', 'Waktu Input', 'Tanggal Beli', 'Bulan', 'Brand', 'Kode Store', 'Nama Store', 'PIC',
+    'Kategori', 'Nama Barang', 'Qty', 'Satuan', 'Harga per Satuan', 'Total', 'Dibayar Dari', 'Toko / Supplier', 'Catatan',
+    'Link Foto Nota', 'ID Kiriman'],
   INPUT_OMZET: ['ID Baris', 'Waktu Input', 'Tanggal', 'Bulan', 'Brand', 'Kode Store', 'Nama Store', 'PIC',
     'Omzet', 'Jumlah Struk', 'Catatan', 'ID Kiriman'],
   MASTER_STORE: ['Kode Store', 'Brand', 'Nama Store', 'Kota', 'PIN', 'Aktif'],
@@ -61,6 +65,12 @@ const KAT_TETAP = ['Sewa tempat', 'Service charge / IPL', 'Internet & telepon', 
   'Cicilan / penyusutan alat', 'Lainnya'];
 const KAT_BULANAN = ['Listrik', 'Air (PDAM)', 'Perbaikan & perawatan', 'Marketing & promosi', 'Komisi ojol / marketplace',
   'Kebersihan & pest control', 'Perlengkapan non-bahan', 'Transport', 'Lembur & insentif', 'Pajak & retribusi', 'Lain-lain'];
+
+// Pembelian di luar bahan baku (tidak masuk HPP / food cost, tapi mengurangi laba & kas)
+const KAT_PEMBELIAN = ['Peralatan dapur', 'Perlengkapan makan & saji', 'Kebersihan', 'ATK & printing', 'Perbaikan kecil',
+  'Transport & parkir', 'Perlengkapan toko', 'Lain-lain'];
+// Sumber uang: dasar hitung kas bersih outlet nanti
+const DIBAYAR_DARI = ['Kas outlet (tunai)', 'Uang pribadi (reimburse)', 'Transfer / kartu HO'];
 
 const KATEGORI = ['Protein', 'Sayur & Bumbu Segar', 'Karbohidrat', 'Saus & Bumbu Jadi', 'Minuman',
   'Operasional & Packaging', 'Lainnya'];
@@ -163,9 +173,16 @@ function dataDashboard_() {
     .filter(r => r[0] !== '' && r[5] !== '')
     .map(r => [tgl(r[2]), String(r[3]), String(r[4]), String(r[5]), Number(r[8]) || 0, r[9] === '' ? null : Number(r[9])]);
 
+  // pembelian non-bahan: [tanggal, bulan, brand, kodeStore, pic, kategori, barang, qty, satuan, harga, total, dibayarDari, toko, catatan, linkFoto, idKiriman]
+  const shP = ss.getSheetByName(CFG.SH_PEMBELIAN);
+  const pembelian = (!shP || shP.getLastRow() < 2) ? [] : shP.getRange(2, 1, shP.getLastRow() - 1, 19).getValues()
+    .filter(r => r[0] !== '' && r[5] !== '')
+    .map(r => [tgl(r[2]), String(r[3]), String(r[4]), String(r[5]), String(r[7]), String(r[8]), String(r[9]),
+      Number(r[10]) || 0, String(r[11]), Number(r[12]) || 0, Number(r[13]) || 0, String(r[14]), String(r[15]), String(r[16]), String(r[17]), String(r[18])]);
+
   const tren = ss.getSheetByName(CFG.SH_TREN);
   const batas = tren ? Number(tren.getRange('F1').getValue()) || CFG.BATAS_FOOD_COST : CFG.BATAS_FOOD_COST;
-  const bulanDipakai = new Set(belanja.map(r => r[1]).concat(omzet.map(r => r[1])));
+  const bulanDipakai = new Set(belanja.map(r => r[1]).concat(omzet.map(r => r[1]), pembelian.map(r => r[1])));
 
   return {
     namaFile: ss.getName(),
@@ -175,6 +192,7 @@ function dataDashboard_() {
     bahan: bacaBahan_(ss).map(b => ({ nama: b.nama, kategori: b.kategori, satuan: b.satuan, brand: b.brand, acuan: b.hargaAcuan })),
     belanja: belanja,
     omzet: omzet,
+    pembelian: pembelian,
     biaya: biayaDashboard_(ss, bulanDipakai)
   };
 }
@@ -197,7 +215,7 @@ function analisisAI_(body) {
 
   const system = [
     'Kamu analis operasional & food cost untuk grup restoran di Indonesia (brand berbahan utama babi: gukbap Korea, bakmi, dll).',
-    'Kamu menerima ringkasan anomali yang sudah dideteksi secara statistik dari data belanja bahan baku, omzet, dan biaya operasional (karyawan, sewa, listrik, dll) tiap outlet, plus laba rugi & margin per outlet kalau datanya ada.',
+    'Kamu menerima ringkasan anomali yang sudah dideteksi secara statistik dari data belanja bahan baku, omzet, dan biaya operasional (karyawan, sewa, listrik, pembelian non-bahan outlet, dll) tiap outlet, plus laba rugi & margin per outlet kalau datanya ada.',
     'Tugas: jelaskan dalam Bahasa Indonesia santai-profesional, singkat dan to the point:',
     '1) 3–5 temuan paling penting untuk profit (urut dari dampak Rupiah terbesar), 2) kemungkinan penyebab masing-masing (harga supplier, porsi, waste, pencurian, salah input, biaya karyawan/sewa terlalu berat, dll),',
     '3) apa yang harus dicek atau diperbaiki HO minggu ini (konkret, per outlet), 4) outlet dengan margin terendah dan apa tuas terbesarnya, 5) catatan kualitas data kalau ada.',
@@ -292,6 +310,9 @@ function getMasterData(storeCode) {
     stores: stores,
     bahan: bahan,
     hargaTerakhir: storeCode ? hargaTerakhir_(ss, storeCode) : {},
+    katPembelian: KAT_PEMBELIAN,
+    dibayarDari: DIBAYAR_DARI,
+    barangPembelian: barangPembelian_(ss),
     waktu: new Date().toISOString()
   };
 }
@@ -353,6 +374,61 @@ function submitBelanja(p) {
   } finally {
     lock.releaseLock();
   }
+}
+
+/**
+ * Pembelian di luar bahan baku (peralatan, kebersihan, ATK, dll). Masuk sheet INPUT_PEMBELIAN,
+ * TIDAK dihitung ke HPP/food cost, tapi mengurangi laba operasional & kas. Aman di-retry (idempotent).
+ */
+function submitPembelian(p) {
+  const lock = LockService.getScriptLock();
+  lock.waitLock(20000);
+  try {
+    const ss = ss_();
+    const store = cekStore_(ss, p.storeCode, p.pin);
+    const sh = ss.getSheetByName(CFG.SH_PEMBELIAN);
+    if (!sh) throw validasi_('Sheet ' + CFG.SH_PEMBELIAN + ' belum ada. Minta HO jalankan menu 🍜 HPP > Setup.');
+    if (!p.idKiriman) throw validasi_('ID kiriman kosong.');
+    if (sudahAda_(sh, 19, p.idKiriman)) return { ok: true, duplikat: true };
+    if (!p.items || !p.items.length) throw validasi_('Belum ada barang yang diisi.');
+    const dari = String(p.dibayarDari || '').trim();
+    if (DIBAYAR_DARI.indexOf(dari) < 0) throw validasi_('Pilih "Dibayar dari".');
+
+    const tgl = parseTanggal_(p.tanggal);
+    const bulan = fmt_(tgl, 'yyyy-MM');
+    const now = new Date();
+    const rows = p.items.map((it, i) => {
+      const nama = String(it.barang || '').trim().replace(/\s+/g, ' ');
+      const kat = String(it.kategori || '').trim();
+      const qty = Number(it.qty), harga = Number(it.harga);
+      const satuan = String(it.satuan || '').trim() || 'pcs';
+      if (!nama) throw validasi_('Nama barang no. ' + (i + 1) + ' kosong.');
+      if (KAT_PEMBELIAN.indexOf(kat) < 0) throw validasi_('Kategori "' + nama + '" belum dipilih.');
+      if (!(qty > 0)) throw validasi_('Qty "' + nama + '" harus lebih dari 0.');
+      if (!(harga > 0)) throw validasi_('Harga "' + nama + '" tidak valid.');
+      return [p.idKiriman + '-' + (i + 1), now, tgl, bulan, store.brand, store.kode, store.nama, String(p.pic || ''),
+        kat, nama, qty, satuan, harga, Math.round(qty * harga), dari, String(p.toko || ''), String(p.catatan || ''), '', p.idKiriman];
+    });
+    if (p.foto && p.foto.data) {
+      const fotoUrl = simpanFoto_(p.foto, store, p.tanggal);
+      rows.forEach(r => { r[17] = fotoUrl; });
+    }
+    sh.getRange(sh.getLastRow() + 1, 1, rows.length, rows[0].length).setValues(rows);
+    return { ok: true, baris: rows.length, total: rows.reduce((s, r) => s + r[13], 0) };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+/** Nama barang pembelian yang pernah dipakai (untuk saran ketik di app, biar penulisan seragam). */
+function barangPembelian_(ss) {
+  const sh = ss.getSheetByName(CFG.SH_PEMBELIAN);
+  if (!sh || sh.getLastRow() < 2) return [];
+  const n = Math.min(CFG.MAKS_BARIS_HARGA_TERAKHIR, sh.getLastRow() - 1);
+  const v = sh.getRange(sh.getLastRow() - n + 1, 9, n, 4).getValues(); // Kategori, Nama Barang, Qty, Satuan
+  const out = new Map();
+  v.forEach(r => { const nama = String(r[1]).trim(); if (nama) out.set(nama.toLowerCase(), { nama: nama, kategori: String(r[0]), satuan: String(r[3]) }); });
+  return [...out.values()].slice(-300);
 }
 
 /** Omzet harian: 1 angka per store per tanggal. Kirim ulang tanggal sama = menimpa. */
@@ -428,7 +504,7 @@ function isiDataDummy() {
   try { ui = SpreadsheetApp.getUi(); } catch (e) { /* dijalankan dari editor */ }
   if (ui) {
     const r = ui.alert('Isi data dummy',
-      'Menambah ±6 bulan data contoh (belanja, omzet, karyawan, sewa & tagihan) untuk outlet UG-01, UG-02, AW-01, BB-01, DW-01. ' +
+      'Menambah ±6 bulan data contoh (belanja, omzet, pembelian non-bahan, karyawan, sewa & tagihan) untuk outlet UG-01, UG-02, AW-01, BB-01, DW-01. ' +
       'Semua ditandai DUMMY dan bisa dihapus lewat menu. Data dummy lama diganti. Lanjut?', ui.ButtonSet.YES_NO);
     if (r !== ui.Button.YES) return;
   }
@@ -453,15 +529,18 @@ function isiDataDummy() {
   });
   const tetap = d.rincianTetap.map(x => [x.store, x.kategori, PENANDA_DUMMY, x.jumlah, '', '']);
   const bulanan = d.biaya.filter(x => x.kelompok === 'Operasional').map(x => [x.bulan, x.store, x.kategori, PENANDA_DUMMY, x.jumlah]);
+  const pembelian = (d.pembelian || []).map(r => ['DUMMY-' + r.id, waktu(r.tgl), tgl(r.tgl), r.bulan, r.brand, r.store, namaStore[r.store] || r.store,
+    'Dummy', r.kategori, r.barang, r.qty, r.satuan, r.harga, r.total, r.dibayarDari, 'Toko dummy', PENANDA_DUMMY, '', 'DUMMY-' + r.id.replace(/-\d+$/, '')]);
 
   tulisDiBawah_(ss.getSheetByName(CFG.SH_BELANJA), belanja);
   tulisDiBawah_(ss.getSheetByName(CFG.SH_OMZET), omzet);
   tulisDiBawah_(ss.getSheetByName(CFG.SH_KARYAWAN), karyawan);
   tulisDiBawah_(ss.getSheetByName(CFG.SH_TETAP), tetap);
   tulisDiBawah_(ss.getSheetByName(CFG.SH_BULANAN), bulanan);
+  tulisDiBawah_(ss.getSheetByName(CFG.SH_PEMBELIAN), pembelian);
 
   const pesan = 'Data dummy terisi: ' + belanja.length + ' baris belanja, ' + omzet.length + ' baris omzet, ' + karyawan.length +
-    ' karyawan, ' + tetap.length + ' biaya tetap, ' + bulanan.length + ' tagihan bulanan' +
+    ' karyawan, ' + tetap.length + ' biaya tetap, ' + bulanan.length + ' tagihan bulanan, ' + pembelian.length + ' pembelian non-bahan' +
     (lama.total ? ' (menggantikan ' + lama.total + ' baris dummy lama)' : '') + '.';
   Logger.log(pesan);
   if (ui) ui.alert(pesan); else { try { ss.toast(pesan, 'HPP', 8); } catch (e) {} }
@@ -471,12 +550,12 @@ function hapusDataDummy() {
   let ui = null;
   try { ui = SpreadsheetApp.getUi(); } catch (e) {}
   if (ui) {
-    const r = ui.alert('Hapus data dummy', 'Semua baris bertanda DUMMY di INPUT_BELANJA, INPUT_OMZET, MASTER_KARYAWAN, BIAYA_TETAP & BIAYA_BULANAN akan dihapus. Data asli tidak disentuh. Lanjut?', ui.ButtonSet.YES_NO);
+    const r = ui.alert('Hapus data dummy', 'Semua baris bertanda DUMMY di INPUT_BELANJA, INPUT_OMZET, INPUT_PEMBELIAN, MASTER_KARYAWAN, BIAYA_TETAP & BIAYA_BULANAN akan dihapus. Data asli tidak disentuh. Lanjut?', ui.ButtonSet.YES_NO);
     if (r !== ui.Button.YES) return;
   }
   const h = hapusDummy_(ss_());
   const pesan = h.total ? 'Terhapus ' + h.total + ' baris dummy (belanja ' + h.belanja + ', omzet ' + h.omzet + ', karyawan ' + h.karyawan +
-    ', biaya tetap ' + h.tetap + ', tagihan ' + h.bulanan + ').' : 'Tidak ada data dummy.';
+    ', biaya tetap ' + h.tetap + ', tagihan ' + h.bulanan + ', pembelian ' + h.pembelian + ').' : 'Tidak ada data dummy.';
   Logger.log(pesan);
   if (ui) ui.alert(pesan);
 }
@@ -489,9 +568,10 @@ function hapusDummy_(ss) {
     omzet: hapusBarisJika_(ss.getSheetByName(CFG.SH_OMZET), 11, idDummy),
     karyawan: hapusBarisJika_(ss.getSheetByName(CFG.SH_KARYAWAN), 8, tanda),
     tetap: hapusBarisJika_(ss.getSheetByName(CFG.SH_TETAP), 2, tanda),
-    bulanan: hapusBarisJika_(ss.getSheetByName(CFG.SH_BULANAN), 3, tanda)
+    bulanan: hapusBarisJika_(ss.getSheetByName(CFG.SH_BULANAN), 3, tanda),
+    pembelian: hapusBarisJika_(ss.getSheetByName(CFG.SH_PEMBELIAN), 0, idDummy)
   };
-  h.total = h.belanja + h.omzet + h.karyawan + h.tetap + h.bulanan;
+  h.total = h.belanja + h.omzet + h.karyawan + h.tetap + h.bulanan + h.pembelian;
   return h;
 }
 
@@ -539,6 +619,19 @@ function setup() {
   o.getRange('D:D').setNumberFormat('@');
   o.getRange('I:J').setNumberFormat('#,##0');
   lebarKolom_(o, [150, 130, 105, 70, 120, 80, 170, 90, 120, 100, 180, 120]);
+
+  // --- INPUT_PEMBELIAN (non-bahan, tidak masuk HPP) ---
+  const pb = siapkanSheet_(ss, CFG.SH_PEMBELIAN, KOLOM.INPUT_PEMBELIAN, '#6D28D9');
+  pb.getRange('B:B').setNumberFormat('yyyy-mm-dd hh:mm');
+  pb.getRange('C:C').setNumberFormat('yyyy-mm-dd');
+  pb.getRange('D:D').setNumberFormat('@');
+  pb.getRange('K:K').setNumberFormat('#,##0.###');
+  pb.getRange('M:N').setNumberFormat('#,##0');
+  pb.getRange('I2:I5000').setDataValidation(SpreadsheetApp.newDataValidation().requireValueInList(KAT_PEMBELIAN, true).setAllowInvalid(true).build());
+  pb.getRange('O2:O5000').setDataValidation(SpreadsheetApp.newDataValidation().requireValueInList(DIBAYAR_DARI, true).setAllowInvalid(true).build());
+  pb.getRange('A1').setNote('Pembelian di luar bahan baku (peralatan, kebersihan, ATK, dll) dari app HP tab Pembelian. Tidak masuk HPP / food cost, tapi mengurangi laba operasional.');
+  pb.getRange('O1').setNote('Sumber uang. "Kas outlet (tunai)" mengurangi kas outlet; "Uang pribadi" = perlu diganti (reimburse); "Transfer / kartu HO" = dibayar pusat.');
+  lebarKolom_(pb, [150, 130, 105, 70, 120, 80, 170, 90, 160, 190, 60, 60, 110, 110, 150, 140, 170, 150, 120]);
 
   // --- MASTER_STORE ---
   const s = siapkanSheet_(ss, CFG.SH_STORE, KOLOM.MASTER_STORE, '#374151');
@@ -735,7 +828,7 @@ function siapkanBiaya_(ss) {
   b.getRange('C2:C2000').setDataValidation(vList(KAT_BULANAN));
   b.getRange('E2:E2000').setDataValidation(vAngka).setNumberFormat('#,##0');
   b.getRange('A1').setNote('Bulan tagihan, format 2026-09. Satu baris per tagihan/biaya.');
-  b.getRange('C1').setNote('Gas LPG & packaging sudah tercatat di INPUT_BELANJA (masuk HPP), jangan diisi lagi di sini.');
+  b.getRange('C1').setNote('Gas LPG & packaging sudah tercatat di INPUT_BELANJA (masuk HPP), dan pembelian kecil dari outlet (peralatan, kebersihan, ATK, dll) di INPUT_PEMBELIAN. Jangan diisi lagi di sini.');
   lebarKolom_(b, [90, 90, 200, 260, 130]);
 }
 
@@ -744,19 +837,19 @@ function siapkanProfit_(ss) {
   sh.clear();
   sh.getRange(1, 1, sh.getMaxRows(), sh.getMaxColumns()).clearDataValidations(); // validasi lama bisa menolak isi baru
   sh.clearConditionalFormatRules();
-  const B = CFG.SH_BELANJA, O = CFG.SH_OMZET, S = CFG.SH_STORE, K = CFG.SH_KARYAWAN, T = CFG.SH_TETAP, BL = CFG.SH_BULANAN;
+  const B = CFG.SH_BELANJA, O = CFG.SH_OMZET, S = CFG.SH_STORE, K = CFG.SH_KARYAWAN, T = CFG.SH_TETAP, BL = CFG.SH_BULANAN, P = CFG.SH_PEMBELIAN;
 
   sh.getRange('Z1').setValue('Daftar bulan (otomatis)');
-  sh.getRange('Z2').setFormula('=LET(b, VSTACK(' + B + '!D2:D, ' + O + '!D2:D, ' + BL + '!A2:A, TEXT(TODAY(), "yyyy-mm")), SORT(UNIQUE(FILTER(b, b<>"")), 1, FALSE))');
+  sh.getRange('Z2').setFormula('=LET(b, VSTACK(' + B + '!D2:D, ' + O + '!D2:D, ' + BL + '!A2:A, ' + P + '!D2:D, TEXT(TODAY(), "yyyy-mm")), SORT(UNIQUE(FILTER(b, b<>"")), 1, FALSE))');
   sh.getRange('A1').setValue('Bulan (yyyy-MM):').setFontWeight('bold');
   sh.getRange('B1').setNumberFormat('@').setValue(fmt_(new Date(), 'yyyy-MM')).setBackground('#FEF3C7').setFontWeight('bold')
     .setDataValidation(SpreadsheetApp.newDataValidation().requireValueInRange(sh.getRange('Z2:Z200'), true).setAllowInvalid(false).build());
   sh.getRange('C1').setValue('← klik ▾ untuk pilih bulan').setFontColor('#6B7280');
-  sh.getRange('A2').setValue('Laba operasional = Omzet − HPP (belanja bahan) − Biaya karyawan − Biaya tetap − Biaya bulanan. Belum termasuk biaya kantor pusat, pajak penghasilan & penyusutan (kecuali diisi di BIAYA_TETAP).')
+  sh.getRange('A2').setValue('Laba operasional = Omzet − HPP (belanja bahan) − Biaya karyawan − Biaya tetap − Biaya bulanan − Pembelian lain (non-bahan). Belum termasuk biaya kantor pusat, pajak penghasilan & penyusutan (kecuali diisi di BIAYA_TETAP).')
     .setFontStyle('italic').setFontColor('#6B7280');
 
   const h = ['Kode Store', 'Nama Store', 'Omzet', 'HPP (bahan)', 'Laba Kotor', '% Laba Kotor', 'Biaya Karyawan', 'Biaya Tetap',
-    'Biaya Bulanan', 'Laba Operasional', 'Margin %', 'Karyawan % Omzet'];
+    'Biaya Bulanan', 'Pembelian Lain', 'Laba Operasional', 'Margin %', 'Karyawan % Omzet'];
   sh.getRange(3, 1, 1, h.length).setValues([h]).setFontWeight('bold').setBackground('#1E40AF').setFontColor('#FFFFFF').setWrap(true);
   sh.setFrozenRows(3);
 
@@ -775,25 +868,26 @@ function siapkanProfit_(ss) {
     aktif(K, 'A', 'G', 'H', K + '!D2:D + ' + K + '!E2:E + ' + K + '!F2:F') + '))))');
   sh.getRange('H5').setFormula('=MAP(A5:A200, LAMBDA(k, IF(k="", "", LET(' + bulanLet + ', ' + aktif(T, 'A', 'E', 'F', T + '!D2:D') + '))))');
   sh.getRange('I5').setFormula('=MAP(A5:A200, LAMBDA(k, IF(k="", "", SUMIFS(' + BL + '!E:E, ' + BL + '!B:B, k, ' + BL + '!A:A, $B$1))))');
-  sh.getRange('J5').setFormula('=MAP(E5:E200, G5:G200, H5:H200, I5:I200, LAMBDA(g, a, b, c, IF(g="", "", g-a-b-c)))');
-  sh.getRange('K5').setFormula('=MAP(C5:C200, J5:J200, LAMBDA(o, l, IF(OR(o="", o=0), "", l/o)))');
-  sh.getRange('L5').setFormula('=MAP(C5:C200, G5:G200, LAMBDA(o, a, IF(OR(o="", o=0), "", a/o)))');
-  ['C', 'D', 'E', 'G', 'H', 'I', 'J'].forEach(c => sh.getRange(c + '4').setFormula('=SUM(' + c + '5:' + c + '200)'));
+  sh.getRange('J5').setFormula('=MAP(A5:A200, LAMBDA(k, IF(k="", "", IFERROR(SUMIFS(' + P + '!N:N, ' + P + '!F:F, k, ' + P + '!D:D, $B$1), 0))))');
+  sh.getRange('K5').setFormula('=MAP(E5:E200, G5:G200, H5:H200, I5:I200, J5:J200, LAMBDA(g, a, b, c, d, IF(g="", "", g-a-b-c-d)))');
+  sh.getRange('L5').setFormula('=MAP(C5:C200, K5:K200, LAMBDA(o, l, IF(OR(o="", o=0), "", l/o)))');
+  sh.getRange('M5').setFormula('=MAP(C5:C200, G5:G200, LAMBDA(o, a, IF(OR(o="", o=0), "", a/o)))');
+  ['C', 'D', 'E', 'G', 'H', 'I', 'J', 'K'].forEach(c => sh.getRange(c + '4').setFormula('=SUM(' + c + '5:' + c + '200)'));
   sh.getRange('F4').setFormula('=IF(C4=0, "", E4/C4)');
-  sh.getRange('K4').setFormula('=IF(C4=0, "", J4/C4)');
-  sh.getRange('L4').setFormula('=IF(C4=0, "", G4/C4)');
-  sh.getRange('A4:L4').setFontWeight('bold').setBackground('#EFF6FF');
+  sh.getRange('L4').setFormula('=IF(C4=0, "", K4/C4)');
+  sh.getRange('M4').setFormula('=IF(C4=0, "", G4/C4)');
+  sh.getRange('A4:M4').setFontWeight('bold').setBackground('#EFF6FF');
 
   sh.getRange('C4:E200').setNumberFormat('#,##0');
-  sh.getRange('G4:J200').setNumberFormat('#,##0;[Red]-#,##0');
+  sh.getRange('G4:K200').setNumberFormat('#,##0;[Red]-#,##0');
   sh.getRange('F4:F200').setNumberFormat('0.0%');
-  sh.getRange('K4:L200').setNumberFormat('0.0%;[Red]-0.0%');
+  sh.getRange('L4:M200').setNumberFormat('0.0%;[Red]-0.0%');
   sh.setConditionalFormatRules([
-    SpreadsheetApp.newConditionalFormatRule().whenFormulaSatisfied('=AND(ISNUMBER($J4), $J4<0)')
-      .setBackground('#FDE8E6').setRanges([sh.getRange('A4:L200')]).build()
+    SpreadsheetApp.newConditionalFormatRule().whenFormulaSatisfied('=AND(ISNUMBER($K4), $K4<0)')
+      .setBackground('#FDE8E6').setRanges([sh.getRange('A4:M200')]).build()
   ]);
   sh.setFrozenColumns(2);
-  lebarKolom_(sh, [100, 210, 120, 120, 120, 90, 120, 110, 110, 130, 85, 100]);
+  lebarKolom_(sh, [100, 210, 120, 120, 120, 90, 120, 110, 110, 120, 130, 85, 100]);
   sh.hideColumns(26);
 }
 
@@ -868,6 +962,9 @@ function siapkanKamus_(ss) {
     ['INPUT_BELANJA', 'Link Foto Nota', 'Link Google Drive foto nota (opsional). Satu kiriman berbagi satu foto.'],
     ['INPUT_BELANJA', 'Flag', 'HARGA > ACUAN +x% (harga di atas MASTER_BAHAN.Harga Acuan). Kosong = normal.'],
     ['INPUT_BELANJA', 'ID Kiriman', 'Satu kali tekan "Kirim" di HP. Dipakai untuk mencegah data dobel.'],
+    ['INPUT_PEMBELIAN', '-', 'Pembelian di luar bahan baku (peralatan, kebersihan, ATK, perbaikan kecil, transport, dll) dari tab Pembelian di app HP. 1 baris = 1 barang. TIDAK masuk HPP / food cost; masuk laba operasional sebagai "Pembelian lain".'],
+    ['INPUT_PEMBELIAN', 'Nama Barang', 'Diketik bebas oleh store (app memberi saran dari nama yang pernah dipakai). Group by pakai Kategori.'],
+    ['INPUT_PEMBELIAN', 'Dibayar Dari', 'Kas outlet (tunai) = mengurangi kas outlet · Uang pribadi (reimburse) = utang ke karyawan · Transfer / kartu HO = dibayar pusat. Dasar perhitungan kas bersih.'],
     ['INPUT_OMZET', 'Tanggal / Bulan', '1 baris per store per tanggal. Kirim ulang tanggal sama menimpa baris lama.'],
     ['INPUT_OMZET', 'Omzet', 'Penjualan hari itu (Rupiah).'],
     ['INPUT_OMZET', 'Jumlah Struk', 'Jumlah transaksi hari itu (opsional). Omzet ÷ Jumlah Struk = rata-rata per transaksi.'],
@@ -878,7 +975,7 @@ function siapkanKamus_(ss) {
     ['MASTER_KARYAWAN', '-', '1 baris = 1 karyawan. Biaya/bln = Gaji Pokok + Tunjangan + BPJS & Lainnya. Dihitung penuh di setiap bulan dia aktif (Mulai ≤ akhir bulan, Selesai kosong atau ≥ awal bulan).'],
     ['BIAYA_TETAP', '-', 'Biaya rutin per bulan per outlet (sewa ÷12, internet, POS, dll) dengan periode Mulai–Selesai.'],
     ['BIAYA_BULANAN', '-', 'Tagihan per bulan per outlet (listrik, air, perbaikan, marketing, komisi ojol, dll). Kolom Bulan format yyyy-MM.'],
-    ['REKAP_PROFIT', '-', 'Laba rugi per outlet untuk bulan di B1. Laba operasional = Omzet − HPP bahan − Karyawan − Biaya tetap − Biaya bulanan. Margin % = Laba operasional ÷ Omzet.']
+    ['REKAP_PROFIT', '-', 'Laba rugi per outlet untuk bulan di B1. Laba operasional = Omzet − HPP bahan − Karyawan − Biaya tetap − Biaya bulanan − Pembelian lain. Margin % = Laba operasional ÷ Omzet.']
   ];
   sh.getRange(1, 1, rows.length, 3).setValues(rows).setWrap(true).setVerticalAlignment('top');
   sh.getRange(1, 1, 1, 3).setFontWeight('bold').setBackground('#374151').setFontColor('#FFFFFF');
@@ -1173,6 +1270,34 @@ function validasi_(pesan) {
       });
     });
 
+    // ===== pembelian non-bahan (tab Pembelian di app HP; tidak masuk HPP) =====
+    // [barang, kategori, satuan, harga, qty maks, peluang per hari]
+    const BARANG = [
+      ['Sabun cuci piring 5 L', 'Kebersihan', 'jerigen', 65000, 2, 0.10], ['Tisu makan', 'Perlengkapan makan & saji', 'pack', 18000, 10, 0.12],
+      ['Plastik sampah besar', 'Kebersihan', 'pack', 25000, 3, 0.08], ['Sumpit kayu', 'Perlengkapan makan & saji', 'pack', 32000, 4, 0.07],
+      ['Kertas struk thermal', 'ATK & printing', 'roll', 9000, 20, 0.04], ['Parkir & bensin belanja', 'Transport & parkir', 'kali', 35000, 1, 0.25],
+      ['Spons & sabut', 'Kebersihan', 'pack', 15000, 3, 0.05], ['Mangkok melamin', 'Peralatan dapur', 'pcs', 28000, 12, 0.015],
+      ['Lampu LED', 'Perbaikan kecil', 'pcs', 45000, 4, 0.02], ['Galon air minum staf', 'Lain-lain', 'galon', 22000, 4, 0.10]
+    ];
+    const DARI = ['Kas outlet (tunai)', 'Kas outlet (tunai)', 'Kas outlet (tunai)', 'Uang pribadi (reimburse)', 'Transfer / kartu HO'];
+    const pembelian = [];
+    let nBeli = 0;
+    for (let d = new Date(mulai); d <= akhir; d.setUTCDate(d.getUTCDate() + 1)) {
+      const tgl = iso(d), bulan = tgl.slice(0, 7);
+      stores.forEach(s => {
+        const idK = 'P' + (++nBeli);
+        let urut = 0;
+        const dari = DARI[Math.floor(rnd() * DARI.length)];
+        BARANG.forEach(([barang, kategori, satuan, harga, maks, peluang]) => {
+          if (rnd() >= peluang) return;
+          const qty = Math.max(1, Math.round(rnd() * maks));
+          const h = Math.round(harga * noise(0.08) / 500) * 500;
+          pembelian.push({ tgl, bulan, brand: s.brand, store: s.kode, pic: 'Demo', kategori, barang, qty, satuan, harga: h, total: qty * h,
+            dibayarDari: dari, toko: 'Toko dummy', catatan: '', foto: '', id: idK + '-' + (++urut) });
+        });
+      });
+    }
+
     return {
       demo: true,
       namaFile: 'DATA DEMO (fiktif)',
@@ -1180,7 +1305,7 @@ function validasi_(pesan) {
       batasFoodCost: 0.35,
       stores: stores.map(({ kode, brand, nama, aktif }) => ({ kode, brand, nama, aktif })),
       bahan: Object.keys(H).map(n => ({ nama: n, kategori: H[n][0], satuan: H[n][1], brand: 'Semua', acuan: 0 })),
-      belanja, omzet, biaya, rincianKaryawan, rincianTetap
+      belanja, omzet, pembelian, biaya, rincianKaryawan, rincianTetap
     };
   }
 
