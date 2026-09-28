@@ -21,7 +21,7 @@ food cost, biaya karyawan, rata-rata per struk, jumlah anomali (semua dibanding 
 | **Ringkasan** | Panel *Kemarin & bulan ini* (omzet kemarin vs minggu lalu, bulan berjalan + proyeksi + jalur target, status input tiap outlet) · omzet per bulan per outlet · tren margin / prime cost / food cost · tabel performa (status, capaian target, prime cost) · per brand · perlu perhatian · Analisis AI · tren bulanan |
 | **Outlet** | Kartu tiap outlet (omzet, tren, capaian target) → klik untuk detail: ringkasan angka (target, margin, prime cost, titik impas, kemarin, saldo kas), omzet harian, margin per bulan, laba rugi, tim, bahan terbesar, anomali |
 | **Penjualan** | Omzet harian + rata-rata 7 hari · rata-rata per hari dalam minggu · rata-rata per struk · heatmap pola ramai outlet × hari · tabel penjualan per outlet |
-| **Cashflow** | Kas masuk vs keluar per bulan · laporan arus kas bulanan (saldo awal → kas masuk → kas keluar → arus bersih → saldo akhir) · cashflow per cabang · saldo kas harian · saldo awal & mutasi manual |
+| **Cashflow** | Kas masuk vs keluar per bulan · laporan arus kas bulanan (saldo awal → kas masuk → kas keluar → arus bersih → saldo akhir) · cashflow per cabang · saldo kas harian |
 | **Profit** | Margin per outlet per bulan · laba rugi per outlet (klik untuk rincian biaya) · titik impas per outlet · biaya per pos |
 | **Belanja & Pembelian** | Belanja bahan per kategori · food cost per outlet · tabel bahan (harga vs periode sebelumnya) · pembelian non-bahan per kategori & sumber uang · riwayat belanja & pembelian lengkap (cari, catatan, link foto nota) |
 | **Anomali** | Semua temuan deteksi otomatis, bisa difilter per jenis, tiap kartu ada grafiknya |
@@ -78,12 +78,10 @@ Nama karyawan & gaji per orang tidak pernah dikirim. Riwayat chat hanya disimpan
 
 ## Cashflow per cabang
 
-Sheet **SALDO_AWAL_KAS** berisi saldo awal tiap outlet (default **Rp100.000.000**, otomatis dibuat saat menu Setup)
-dan tanggal kas mulai dihitung. Sheet **MUTASI_KAS** untuk uang keluar/masuk yang bukan omzet atau belanja
-(setoran ke HO, tambahan modal, koreksi selisih). Dashboard menghitung:
-`Kas = saldo awal + omzet − belanja bahan − pembelian lain − gaji − biaya tetap − tagihan ± mutasi`.
+Tiap outlet mulai dengan saldo kas **Rp100.000.000** (ubah di sheet **REKAP_CASHFLOW** sel **D1**), dihitung sejak awal
+bulan data pertama. `Kas = saldo awal + omzet − belanja bahan − pembelian lain − gaji − biaya tetap − tagihan`.
 Gaji, biaya tetap & tagihan bulanan dianggap dibayar di akhir bulan; untuk bulan berjalan ditampilkan sebagai
-"belum dibayar". Semua pengeluaran outlet mengurangi kas outlet, siapa pun yang membayar.
+"belum dibayar". Sheet **REKAP_CASHFLOW** berisi laporan yang sama dengan rumus live (B1 = pilih outlet).
 
 ## Analisis AI (hemat token)
 

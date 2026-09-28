@@ -913,7 +913,7 @@
     const stores = D.stores.filter(s => inStore(sc, s.kode)), kodes = stores.map(s => s.kode);
     const kosong = !adaKas();
     $('#kasKosong').classList.toggle('hidden', !kosong);
-    if (kosong) { ['#tbArus', '#tbKas', '#tbMutasi'].forEach(id => { $(id).innerHTML = ''; }); return; }
+    if (kosong) { ['#tbArus', '#tbKas'].forEach(id => { $(id).innerHTML = ''; }); return; }
     const bulanIni = today().slice(0, 7);
     const bl = sc.bulan.filter(b => b + '-01' <= today()), ar = bl.map(b => arusBulan(kodes, b)); // persis periode filter, sama dengan KPI
     const lblB = b => labelBulan(b) + (b === bulanIni ? '*' : '');
@@ -986,13 +986,6 @@
       '</tbody><tfoot><tr><td>Total</td>' + sel2(t2) + '</tr></tfoot>';
     $$('#tbKas tr.klik').forEach(tr => tr.addEventListener('click', () => pilihOutlet(tr.dataset.s)));
     $('#kasBerjalan').textContent = 'Basis kas: uang benar-benar masuk/keluar. Gaji, sewa & tagihan dicatat keluar di akhir bulan. Semua pengeluaran outlet mengurangi kas outlet, siapa pun yang membayar.';
-
-    // 5) saldo awal & mutasi manual
-    const mut = (D.kasAwal || []).filter(r => inStore(sc, r.store)).map(r => ({ tgl: r.tgl, store: r.store, jenis: 'Saldo awal', ket: '', v: r.jumlah }))
-      .concat((D.mutasiKas || []).filter(r => inStore(sc, r.store)).map(r => { const a = arahMutasi(r.jenis); return { tgl: r.tgl, store: r.store, jenis: r.jenis, ket: r.ket, v: a ? a * Math.abs(r.jumlah) : r.jumlah }; }))
-      .sort((a, b) => a.tgl < b.tgl ? 1 : -1);
-    $('#tbMutasi').innerHTML = '<thead><tr><th>Tanggal</th><th>Outlet</th><th>Jenis</th><th class="n">Jumlah</th></tr></thead><tbody>' +
-      mut.slice(0, 50).map(m => '<tr><td>' + esc(m.tgl) + '</td><td>' + esc(m.store) + '</td><td>' + esc(m.jenis) + (m.ket ? ' <span class="hint">· ' + esc(m.ket) + '</span>' : '') + '</td>' + tdJ(m.v, m.v < 0 ? 'biaya' : '') + '</tr>').join('') + '</tbody>';
   }
 
   /* ================= BELANJA & BAHAN ================= */
