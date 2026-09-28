@@ -18,16 +18,24 @@ food cost, biaya karyawan, rata-rata per struk, jumlah anomali (semua dibanding 
 
 | Tab | Isi |
 |---|---|
-| **Ringkasan** | Omzet per bulan per outlet · tren margin / food cost / karyawan · tabel performa outlet dengan status (✓ Sehat / ! Perlu perhatian / ▲ Kritis) · per brand · 4 hal yang perlu perhatian · Analisis AI · tren bulanan |
-| **Outlet** | Kartu tiap outlet → klik untuk detail: omzet harian, margin & food cost per bulan, laba rugi, tim per jabatan, 10 bahan terbesar, anomali outlet itu |
-| **Penjualan** | Omzet harian · rata-rata per hari dalam minggu · rata-rata per struk · tabel penjualan per outlet (hari terbaik) |
+| **Ringkasan** | Panel *Kemarin & bulan ini* (omzet kemarin vs minggu lalu, bulan berjalan + proyeksi + jalur target, status input tiap outlet) · omzet per bulan per outlet · tren margin / prime cost / food cost · tabel performa (status, capaian target, prime cost) · per brand · perlu perhatian · Analisis AI · tren bulanan |
+| **Outlet** | Kartu tiap outlet (omzet, tren, capaian target) → klik untuk detail: ringkasan angka (target, margin, prime cost, titik impas, kemarin, saldo kas), omzet harian, margin per bulan, laba rugi, tim, bahan terbesar, anomali |
+| **Penjualan** | Omzet harian + rata-rata 7 hari · rata-rata per hari dalam minggu · rata-rata per struk · heatmap pola ramai outlet × hari · tabel penjualan per outlet |
 | **Cashflow** | Kas masuk vs keluar per bulan · laporan arus kas bulanan (saldo awal → kas masuk → kas keluar → arus bersih → saldo akhir) · cashflow per cabang · saldo kas harian · saldo awal & mutasi manual |
-| **Profit** | Margin per outlet per bulan · laba rugi per outlet (klik untuk rincian biaya) · biaya per pos |
+| **Profit** | Margin per outlet per bulan · laba rugi per outlet (klik untuk rincian biaya) · titik impas per outlet · biaya per pos |
 | **Belanja & Pembelian** | Belanja bahan per kategori · food cost per outlet · tabel bahan (harga vs periode sebelumnya) · pembelian non-bahan per kategori & sumber uang · riwayat belanja & pembelian lengkap (cari, catatan, link foto nota) |
 | **Anomali** | Semua temuan deteksi otomatis, bisa difilter per jenis, tiap kartu ada grafiknya |
 
+Perbandingan "vs periode sebelumnya" selalu **setara**: kalau periode mencakup bulan berjalan, pembandingnya dipotong
+di tanggal yang sama (mis. 1–28 Sep vs 1–28 Agu). Tiap grafik punya tombol **Tabel**, dan filter tersimpan di link
+(bisa di-bookmark / dibagikan).
+
+**Target** diisi di sheet **TARGET_OUTLET** (target omzet per bulan, batas food cost, target margin per outlet).
+**Prime cost** = (bahan + karyawan) ÷ omzet, patokan ≤ 65%. **Titik impas** = omzet per hari minimal supaya tidak rugi
+(biaya tetap ÷ (1 − rasio biaya variabel)).
+
 Status outlet: **Kritis** kalau rugi atau food cost > batas + 5 poin; **Perlu perhatian** kalau margin < 10%,
-food cost > batas (35%), atau ada anomali tingkat tinggi.
+food cost > batas (35% atau batas outlet di TARGET_OUTLET), margin di bawah target outlet, atau ada anomali tingkat tinggi.
 
 ## Apa yang dideteksi (tab Anomali)
 

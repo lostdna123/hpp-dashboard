@@ -37,6 +37,7 @@ const CFG = {
   SH_KAMUS: 'KAMUS_DATA',
   SH_KAS_AWAL: 'SALDO_AWAL_KAS',
   SH_MUTASI_KAS: 'MUTASI_KAS',
+  SH_TARGET: 'TARGET_OUTLET',
   SALDO_AWAL_KAS: 100000000,      // saldo awal default tiap outlet baru (bisa diubah per outlet di sheet)
   FOLDER_NOTA: 'Foto Nota HPP',
   TOLERANSI_HARGA: 0.20,          // flag kalau harga > harga acuan + 20%
@@ -61,7 +62,8 @@ const KOLOM = {
   BIAYA_TETAP: ['Kode Store', 'Kategori', 'Keterangan', 'Jumlah /bln', 'Mulai', 'Selesai'],
   BIAYA_BULANAN: ['Bulan', 'Kode Store', 'Kategori', 'Keterangan', 'Jumlah'],
   SALDO_AWAL_KAS: ['Kode Store', 'Tanggal Mulai', 'Saldo Awal', 'Catatan'],
-  MUTASI_KAS: ['Tanggal', 'Kode Store', 'Jenis', 'Keterangan', 'Jumlah']
+  MUTASI_KAS: ['Tanggal', 'Kode Store', 'Jenis', 'Keterangan', 'Jumlah'],
+  TARGET_OUTLET: ['Kode Store', 'Target Omzet /bln', 'Batas Food Cost', 'Target Margin', 'Catatan']
 };
 // Arah mutasi ditentukan oleh jenisnya (isi Jumlah positif). Jenis "(+/−)" memakai tanda angka yang diisi.
 const JENIS_MUTASI = ['Setoran / tarik ke HO (keluar)', 'Tambahan modal dari HO (masuk)', 'Koreksi selisih kas (+/−)', 'Lain-lain (+/−)'];
@@ -192,6 +194,11 @@ function dataDashboard_() {
   const mutasiKas = bacaDenganPeriode_(ss, CFG.SH_MUTASI_KAS, r => [tgl(r[0]), String(r[1]).trim(), String(r[2]).trim(), String(r[3] || ''), Number(r[4]) || 0])
     .filter(r => r[0] && r[1] && r[4]);
 
+  // target per outlet (kosong = belum ditentukan). Persen boleh diisi 32 / 32% / 0,32.
+  const persen = v => { const n = Number(v); return v === '' || !isFinite(n) || n <= 0 ? null : n > 1 ? n / 100 : n; };
+  const target = bacaDenganPeriode_(ss, CFG.SH_TARGET, r => [String(r[0]).trim(), Number(r[1]) > 0 ? Number(r[1]) : null, persen(r[2]), persen(r[3])])
+    .filter(r => r[0] && (r[1] || r[2] || r[3]));
+
   const tren = ss.getSheetByName(CFG.SH_TREN);
   const batas = tren ? Number(tren.getRange('F1').getValue()) || CFG.BATAS_FOOD_COST : CFG.BATAS_FOOD_COST;
   const bulanDipakai = new Set(belanja.map(r => r[1]).concat(omzet.map(r => r[1]), pembelian.map(r => r[1])));
@@ -206,6 +213,7 @@ function dataDashboard_() {
     omzet: omzet,
     pembelian: pembelian,
     kasAwal: kasAwal,
+    target: target,
     mutasiKas: mutasiKas,
     biaya: biayaDashboard_(ss, bulanDipakai)
   };
@@ -683,6 +691,7 @@ function setup() {
 
   siapkanBiaya_(ss);
   siapkanKas_(ss);
+  siapkanTarget_(ss);
   siapkanRekap_(ss);
   siapkanTren_(ss);
   siapkanProfit_(ss);
@@ -882,6 +891,22 @@ function siapkanKas_(ss) {
   lebarKolom_(m, [105, 90, 230, 260, 130]);
 }
 
+/** TARGET_OUTLET: 1 baris per outlet. Kolom kosong = tidak ada target (dashboard pakai batas umum). */
+function siapkanTarget_(ss) {
+  const t = siapkanSheet_(ss, CFG.SH_TARGET, KOLOM.TARGET_OUTLET, '#7C2D12');
+  t.getRange('A2:A200').setDataValidation(SpreadsheetApp.newDataValidation()
+    .requireValueInRange(ss.getSheetByName(CFG.SH_STORE).getRange('A2:A200'), true).setAllowInvalid(false).build());
+  t.getRange('B2:B200').setNumberFormat('#,##0');
+  t.getRange('C2:D200').setNumberFormat('0.0%');
+  const ada = new Set(t.getLastRow() >= 2 ? t.getRange(2, 1, t.getLastRow() - 1, 1).getValues().map(r => String(r[0]).trim()) : []);
+  const baru = bacaStore_(ss).filter(s => !ada.has(s.kode)).map(s => [s.kode, '', '', '', '']);
+  if (baru.length) t.getRange(t.getLastRow() + 1, 1, baru.length, 5).setValues(baru);
+  t.getRange('B1').setNote('Target omzet per bulan (Rupiah). Dashboard menampilkan capaian & proyeksi terhadap target ini.');
+  t.getRange('C1').setNote('Batas food cost outlet ini, mis. 32%. Kosong = pakai batas umum di REKAP_TREN!F1.');
+  t.getRange('D1').setNote('Target margin operasional, mis. 20%. Di bawah ini outlet ditandai "Perlu perhatian". Kosong = 10%.');
+  lebarKolom_(t, [90, 150, 120, 120, 240]);
+}
+
 /** Awal bulan dari data paling awal (belanja/omzet); kalau belum ada data, awal bulan ini. */
 function tanggalMulaiData_(ss) {
   let min = null;
@@ -1027,6 +1052,7 @@ function siapkanKamus_(ss) {
     ['INPUT_PEMBELIAN', '-', 'Pembelian di luar bahan baku (peralatan, kebersihan, ATK, perbaikan kecil, transport, dll) dari tab Pembelian di app HP. 1 baris = 1 barang. TIDAK masuk HPP / food cost; masuk laba operasional sebagai "Pembelian lain".'],
     ['INPUT_PEMBELIAN', 'Nama Barang', 'Diketik bebas oleh store (app memberi saran dari nama yang pernah dipakai). Group by pakai Kategori.'],
     ['INPUT_PEMBELIAN', 'Dibayar Dari', 'Kas outlet (tunai) = mengurangi kas outlet · Uang pribadi (reimburse) = utang ke karyawan · Transfer / kartu HO = dibayar pusat. Dasar perhitungan kas bersih.'],
+    ['TARGET_OUTLET', '-', 'Target per outlet: omzet per bulan, batas food cost, target margin operasional. Kolom kosong = tidak ada target.'],
     ['SALDO_AWAL_KAS', '-', 'Saldo kas awal tiap outlet (default Rp100.000.000) dan tanggal kas mulai dihitung.'],
     ['MUTASI_KAS', '-', 'Mutasi kas manual: setoran/tarik ke HO (keluar), tambahan modal (masuk), koreksi selisih (+/−). Kas outlet = saldo awal + omzet − belanja bahan − pembelian lain − gaji − biaya tetap − tagihan bulanan ± mutasi. Gaji, biaya tetap & tagihan dianggap dibayar akhir bulan.'],
     ['INPUT_OMZET', 'Tanggal / Bulan', '1 baris per store per tanggal. Kirim ulang tanggal sama menimpa baris lama.'],
@@ -1371,7 +1397,12 @@ function validasi_(pesan) {
       bahan: Object.keys(H).map(n => ({ nama: n, kategori: H[n][0], satuan: H[n][1], brand: 'Semua', acuan: 0 })),
       belanja, omzet, pembelian, biaya, rincianKaryawan, rincianTetap,
       kasAwal: stores.map(s => ({ store: s.kode, tgl: iso(mulai), jumlah: 100000000 })),
-      mutasiKas: []
+      mutasiKas: [],
+      // target contoh: sebagian outlet di atas target, sebagian di bawah
+      target: stores.map(s => {
+        const f = { 'UG-01': 1.06, 'UG-02': 1.0, 'AW-01': 0.95, 'BB-01': 1.08, 'DW-01': 0.97 }[s.kode] || 1;
+        return { store: s.kode, omzet: Math.round(s.omzet * 30.4 * 1.07 * f / 1e7) * 1e7, fc: 0.32, margin: 0.22 };
+      })
     };
   }
 

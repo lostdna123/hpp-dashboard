@@ -75,13 +75,14 @@
   <main>
     <!-- ===== RINGKASAN ===== -->
     <section id="v-ringkasan" class="view">
+      <div class="card pulse" id="pulse"></div>
       <div class="grid2">
         <div class="card">
           <div class="card-head"><h2>Omzet per bulan</h2><span class="hint">per outlet, ditumpuk</span></div>
           <div class="chart-box"><canvas id="chOmzetBulan" aria-label="Grafik omzet per bulan per outlet"></canvas></div>
         </div>
         <div class="card">
-          <div class="card-head"><h2>Margin, food cost &amp; karyawan</h2><span class="hint">% dari omzet, outlet sesuai filter</span></div>
+          <div class="card-head"><h2>Margin, prime cost &amp; food cost</h2><span class="hint">% dari omzet · prime cost = bahan + karyawan (patokan ≤ 65%)</span></div>
           <div class="chart-box"><canvas id="chRasio" aria-label="Grafik margin, food cost dan biaya karyawan per bulan"></canvas></div>
         </div>
       </div>
@@ -149,6 +150,11 @@
         </div>
       </div>
       <div class="card">
+        <div class="card-head"><h2>Pola ramai per hari</h2><span class="hint">indeks omzet rata-rata tiap hari vs rata-rata harian outlet itu (100 = rata-rata) · bantu atur jadwal shift &amp; stok</span></div>
+        <div class="table-wrap"><table id="tbHeat" class="heatmap"></table></div>
+        <div class="heat-legend" aria-hidden="true"><span>lebih sepi</span><i></i><span>lebih ramai</span></div>
+      </div>
+      <div class="card">
         <div class="card-head"><h2>Penjualan per outlet</h2><span class="hint">periode sesuai filter</span></div>
         <div class="table-wrap"><table id="tbPenjualan"></table></div>
       </div>
@@ -174,6 +180,14 @@
       <div class="card">
         <div class="card-head"><h2>Laba rugi per outlet</h2><span class="hint">periode sesuai filter · klik baris untuk rincian biaya</span></div>
         <div class="table-wrap"><table id="tbProfit"></table></div>
+      </div>
+      <div class="card" id="impasKartu">
+        <div class="card-head"><h2>Titik impas per outlet</h2><span class="hint">omzet minimal per hari supaya tidak rugi, dari biaya periode filter · klik baris untuk detail outlet</span></div>
+        <div class="grid2 inner impas">
+          <div class="chart-box short"><canvas id="chImpas" aria-label="Grafik omzet rata-rata per hari dibanding titik impas per outlet"></canvas></div>
+          <div class="table-wrap"><table id="tbImpas"></table></div>
+        </div>
+        <p class="hint">Biaya tetap = gaji + sewa &amp; biaya tetap + tagihan (tanpa komisi ojol). Biaya variabel = bahan + pembelian lain + komisi ojol, ikut naik-turun dengan omzet. Jarak aman &lt; 20% = rawan rugi kalau omzet turun.</p>
       </div>
       <div class="card">
         <div class="card-head"><h2>Biaya per pos</h2><span class="hint">outlet sesuai filter, % dari omzet</span></div>

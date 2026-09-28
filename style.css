@@ -331,3 +331,65 @@ table.arus tr.subtot td:first-child{background:var(--surface-2)}
 table.arus td:last-child,table.arus th:last-child{border-left:1px solid var(--line-2);font-weight:700}
 table.arus tr.grp td{border-left:0;position:static}
 td.pos{color:var(--good)}
+
+/* ===================== panel kemarin & bulan ini ===================== */
+.pulse-grid{display:grid;grid-template-columns:1fr 1.15fr 1fr;gap:0}
+.pcol{padding:0 22px;border-left:1px solid var(--line);min-width:0}
+.pcol:first-child{padding-left:0;border-left:0}
+.pcol:last-child{padding-right:0}
+.plabel{font-size:12px;font-weight:600;color:var(--ink-2)}
+.pbig{font-size:28px;font-weight:750;letter-spacing:-.025em;line-height:1.15;margin-top:6px}
+.pcol .d{font-size:12px;color:var(--muted);margin-top:4px}
+.plist{list-style:none;margin:14px 0 0;padding:0}
+.plist li{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:7px 0;border-top:1px solid var(--line);font-size:13px}
+.plist li:first-child{border-top:0}
+.plist .pv{display:inline-flex;gap:10px;align-items:baseline;font-variant-numeric:tabular-nums}
+.plist .pv span{font-size:12px;min-width:44px;text-align:right}
+.plist.inputs li{align-items:center}
+.plist.inputs .hint{font-size:11.5px;margin-top:1px;padding-left:17px}
+.pproj{display:flex;justify-content:space-between;align-items:baseline;margin-top:16px;padding:10px 12px;border-radius:10px;background:var(--surface-2);font-size:12.5px;color:var(--ink-2)}
+.pproj b{font-size:15px;color:var(--ink)}
+.bullet{position:relative;height:10px;border-radius:99px;background:var(--surface-3);margin-top:16px;overflow:visible}
+.bullet .fill{position:absolute;left:0;top:0;bottom:0;border-radius:99px;background:var(--s1)}
+.bullet .fill.lambat{background:var(--serious)}
+.bullet .pace{position:absolute;top:-4px;bottom:-4px;width:2px;margin-left:-1px;background:var(--ink);border-radius:2px}
+.pmeta{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:8px;font-size:12.5px;color:var(--ink-2);flex-wrap:wrap}
+.pcol .hint{margin-top:6px;line-height:1.5}
+.ptip{margin-top:14px !important}
+/* capaian target */
+.cap{display:inline-flex;align-items:center;gap:7px;justify-content:flex-end}
+.cap-bar{display:inline-block;width:46px;height:6px;border-radius:99px;background:var(--surface-3);overflow:hidden}
+.cap-bar i{display:block;height:100%;background:var(--s1);border-radius:99px}
+.otarget{display:flex;align-items:center;gap:8px;margin-top:8px;font-size:11.5px;white-space:nowrap}
+.otarget .cap{justify-content:flex-start}
+.otarget .cap-bar{width:44px}
+@media (max-width:900px){
+  .pulse-grid{grid-template-columns:1fr}
+  .pcol{padding:16px 0 0;border-left:0;border-top:1px solid var(--line);margin-top:16px}
+  .pcol:first-child{padding-top:0;border-top:0;margin-top:0}
+}
+/* heatmap pola ramai */
+table.heatmap td.heat{font-weight:700;text-align:center;border-bottom:2px solid var(--surface);border-left:2px solid var(--surface);border-radius:6px;min-width:52px}
+table.heatmap th.n{text-align:center}
+.heat-legend{display:flex;align-items:center;gap:8px;justify-content:flex-end;margin-top:10px;font-size:11.5px;color:var(--muted)}
+.heat-legend i{display:block;width:140px;height:8px;border-radius:99px;background:linear-gradient(90deg,color-mix(in oklab,var(--s1) 78%,var(--surface-2)),var(--surface-2),color-mix(in oklab,var(--s2) 78%,var(--surface-2)))}
+/* ringkasan angka di detail outlet */
+.mini-kpis{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:0;padding:16px 4px}
+.mk{padding:0 16px;border-left:1px solid var(--line);min-width:0}
+.mk:first-child{border-left:0}
+.mk span{display:block;font-size:11.5px;color:var(--ink-2);font-weight:600}
+.mk b{display:block;font-size:19px;font-weight:750;letter-spacing:-.02em;margin-top:4px}
+.mk b.over,.mk b.neg{color:var(--crit)}
+.mk small{display:flex;flex-wrap:wrap;align-items:center;gap:4px;font-size:11.5px;color:var(--muted);margin-top:3px}
+.mk small .cap-bar{width:36px}
+@media (max-width:1000px){ .mini-kpis{grid-template-columns:repeat(3,minmax(0,1fr));row-gap:16px} .mk:nth-child(4){border-left:0} }
+@media (max-width:640px){ .mini-kpis{grid-template-columns:repeat(2,minmax(0,1fr))} .mk:nth-child(odd){border-left:0} .mk:nth-child(4){border-left:1px solid var(--line)} }
+.mk small b{display:inline;font-size:inherit;margin:0;letter-spacing:0}
+.mk small .cap{gap:5px}
+.grid2.impas{grid-template-columns:minmax(0,1fr) minmax(0,1.2fr)}
+@media (max-width:900px){ .grid2.impas{grid-template-columns:minmax(0,1fr)} }
+/* tabel pengganti grafik */
+.tv{max-height:340px;overflow:auto;margin-top:2px}
+.tv table td,.tv table th{font-size:12.5px;padding:7px 10px}
+.tv-btn{font-weight:600;color:var(--ink-2)}
+.card-head .tv-btn + .tv-btn{margin-left:6px}

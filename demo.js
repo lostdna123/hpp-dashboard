@@ -191,7 +191,12 @@
       bahan: Object.keys(H).map(n => ({ nama: n, kategori: H[n][0], satuan: H[n][1], brand: 'Semua', acuan: 0 })),
       belanja, omzet, pembelian, biaya, rincianKaryawan, rincianTetap,
       kasAwal: stores.map(s => ({ store: s.kode, tgl: iso(mulai), jumlah: 100000000 })),
-      mutasiKas: []
+      mutasiKas: [],
+      // target contoh: sebagian outlet di atas target, sebagian di bawah
+      target: stores.map(s => {
+        const f = { 'UG-01': 1.06, 'UG-02': 1.0, 'AW-01': 0.95, 'BB-01': 1.08, 'DW-01': 0.97 }[s.kode] || 1;
+        return { store: s.kode, omzet: Math.round(s.omzet * 30.4 * 1.07 * f / 1e7) * 1e7, fc: 0.32, margin: 0.22 };
+      })
     };
   }
 
