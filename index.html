@@ -42,6 +42,7 @@
 
   <nav class="tabs" role="tablist">
     <button role="tab" data-tab="anomali" class="on">Anomali <span class="count" id="cntAnomali"></span></button>
+    <button role="tab" data-tab="profit">Profit</button>
     <button role="tab" data-tab="store">Per outlet</button>
     <button role="tab" data-tab="item">Per bahan</button>
     <button role="tab" data-tab="bulan">Per bulan</button>
@@ -70,6 +71,28 @@
 
       <div class="chips" id="chips" role="group" aria-label="Filter jenis anomali"></div>
       <div id="anList" class="an-list"></div>
+    </section>
+
+    <!-- ===== PROFIT ===== -->
+    <section id="v-profit" class="view hidden">
+      <div class="card hidden" id="profitKosong">
+        <h2>Biaya operasional belum diisi</h2>
+        <p class="hint">Untuk menghitung laba & margin, isi di Google Sheet:</p>
+        <ul class="hint">
+          <li><b>MASTER_KARYAWAN</b>: 1 baris per karyawan (outlet, nama, jabatan, gaji, tunjangan, BPJS).</li>
+          <li><b>BIAYA_TETAP</b>: sewa (÷12 kalau bayar tahunan), internet, POS, dll per bulan.</li>
+          <li><b>BIAYA_BULANAN</b>: listrik, air, perbaikan, marketing, komisi ojol, dll per bulan.</li>
+        </ul>
+        <p class="hint">Sementara itu, tabel di bawah menampilkan laba kotor (omzet − bahan). Mau lihat contoh lengkap? Pengaturan › Coba pakai data demo.</p>
+      </div>
+      <div class="card">
+        <div class="card-head"><h2>Margin operasional per outlet per bulan</h2><span class="hint" id="profitNote"></span></div>
+        <div class="chart-box"><canvas id="chProfit" aria-label="Grafik margin operasional per outlet per bulan"></canvas></div>
+      </div>
+      <div class="card">
+        <div class="card-head"><h2>Laba rugi per outlet</h2><span class="hint">periode sesuai filter · klik baris untuk rincian biaya</span></div>
+        <div class="table-wrap"><table id="tbProfit"></table></div>
+      </div>
     </section>
 
     <!-- ===== PER OUTLET ===== -->

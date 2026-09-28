@@ -58,7 +58,8 @@
       namaFile: raw.namaFile, diambil: raw.diambil, batasFoodCost: raw.batasFoodCost,
       stores: raw.stores, bahan: raw.bahan,
       belanja: raw.belanja.map(r => ({ tgl: r[0], bulan: r[1], brand: r[2], store: r[3], pic: r[4], kategori: r[5], bahan: r[6], qty: r[7], satuan: r[8], harga: r[9], total: r[10], supplier: r[11], flag: r[12], id: r[13] })),
-      omzet: raw.omzet.map(r => ({ tgl: r[0], bulan: r[1], brand: r[2], store: r[3], omzet: r[4], struk: r[5] }))
+      omzet: raw.omzet.map(r => ({ tgl: r[0], bulan: r[1], brand: r[2], store: r[3], omzet: r[4], struk: r[5] })),
+      biaya: (raw.biaya || []).map(r => ({ bulan: r[0], store: r[1], kelompok: r[2], kategori: r[3], jumlah: Number(r[4]) || 0 }))
     };
   }
 
@@ -170,17 +171,47 @@
     return { B, O, bel, omz, fc: omz > 0 ? bel / omz : null };
   }
 
+  /**
+   * Laba rugi untuk outlet yang lolos filter fStore, bulan dari..sampai.
+   * Bulan berjalan: biaya karyawan & tetap dipotong proporsional sesuai hari yang sudah lewat,
+   * supaya sebanding dengan omzet yang baru masuk sebagian.
+   */
+  function hitungPL(fStore, dari, sampai) {
+    const D = st.data, bulanIni = today().slice(0, 7);
+    const faktorBerjalan = Math.max(1, Number(today().slice(8, 10)) - 1) / Anomali.daysInMonth(bulanIni);
+    const inR = r => r.bulan >= dari && r.bulan <= sampai && fStore(r.store);
+    const omz = sum(D.omzet.filter(inR).map(r => r.omzet)), hpp = sum(D.belanja.filter(inR).map(r => r.total));
+    const by = (D.biaya || []).filter(inR).map(r => Object.assign({}, r, {
+      jumlah: r.bulan === bulanIni && r.kelompok !== 'Operasional' ? r.jumlah * faktorBerjalan : r.jumlah
+    }));
+    const kel = k => sum(by.filter(r => r.kelompok === k).map(r => r.jumlah));
+    const kary = kel('Karyawan'), tetap = kel('Tetap'), ops = kel('Operasional');
+    const laba = omz - hpp - kary - tetap - ops;
+    return {
+      omz, hpp, kary, tetap, ops, laba, lk: omz - hpp, by,
+      margin: omz > 0 ? laba / omz : null, lkPct: omz > 0 ? (omz - hpp) / omz : null,
+      adaBiaya: by.some(r => r.kelompok !== 'Operasional'), berjalan: sampai >= bulanIni
+    };
+  }
+  const plScope = (sc, dari, sampai) => hitungPL(s => inStore(sc, s), dari, sampai);
+
   function renderKpi() {
     const sc = st.scope, a = agregat(sc, sc.dari, sc.sampai), p = agregat(sc, sc.prevDari, sc.prevSampai);
     const tinggi = st.anomali.filter(x => x.level === 'tinggi').length, sedang = st.anomali.filter(x => x.level === 'sedang').length;
     const bocor = sum(st.anomali.filter(x => x.dimensi === 'item' && x.jenis !== 'harga-pasar' || x.dimensi === 'data' && x.jenis === 'dobel').map(x => x.dampak));
-    const delta = (cur, prev, pctPoin) => {
+    const delta = (cur, prev, pctPoin, naikBagus) => {
       if (prev == null || !prev || cur == null) return '<div class="d">vs periode sebelumnya: –</div>';
-      if (pctPoin) { const d = (cur - prev) * 100; return '<div class="d ' + (d > 0.05 ? 'up' : d < -0.05 ? 'down' : '') + '">' + (d > 0 ? '▲ +' : d < 0 ? '▼ ' : '') + num(d, 1) + ' poin vs periode sebelumnya</div>'; }
+      if (pctPoin) { const d = (cur - prev) * 100, buruk = naikBagus ? d < -0.05 : d > 0.05, baik = naikBagus ? d > 0.05 : d < -0.05; return '<div class="d ' + (buruk ? 'up' : baik ? 'down' : '') + '">' + (d > 0 ? '▲ +' : d < 0 ? '▼ ' : '') + num(d, 1) + ' poin vs periode sebelumnya</div>'; }
       const r = cur / prev - 1; return '<div class="d">' + (r >= 0 ? '▲ +' : '▼ ') + pct(r, 0) + ' vs periode sebelumnya</div>';
     };
     const batas = st.data.batasFoodCost || 0.35;
+    const pl = plScope(sc, sc.dari, sc.sampai), plP = plScope(sc, sc.prevDari, sc.prevSampai);
+    const kpiMargin = pl.adaBiaya
+      ? '<div class="kpi" title="Laba operasional ÷ omzet. Laba operasional = omzet − bahan − karyawan − biaya tetap − biaya bulanan."><div class="l">Margin operasional</div><div class="v' + (pl.margin < 0 ? ' neg' : '') + '">' + pct(pl.margin) + '</div>' +
+        (plP.adaBiaya ? delta(pl.margin, plP.margin, true, true) : '<div class="d">laba ' + rpS(pl.laba) + '</div>') + '</div>'
+      : '<div class="kpi"><div class="l">Margin operasional</div><div class="v">–</div><div class="d">isi biaya karyawan & sewa di sheet</div></div>';
     $('#kpis').innerHTML = [
+      kpiMargin,
       '<div class="kpi"><div class="l">Food cost</div><div class="v' + (a.fc > batas ? ' over' : '') + '">' + pct(a.fc) + '</div>' + delta(a.fc, p.fc, true) + '</div>',
       '<div class="kpi"><div class="l">Total belanja</div><div class="v">' + rpS(a.bel) + '</div>' + delta(a.bel, p.bel) + '</div>',
       '<div class="kpi"><div class="l">Omzet</div><div class="v">' + rpS(a.omz) + '</div>' + delta(a.omz, p.omz) + '</div>',
@@ -196,8 +227,9 @@
     renderTab();
   }));
   function renderTab() {
-    ['anomali', 'store', 'item', 'bulan'].forEach(t => $('#v-' + t).classList.toggle('hidden', t !== st.tab));
+    ['anomali', 'profit', 'store', 'item', 'bulan'].forEach(t => $('#v-' + t).classList.toggle('hidden', t !== st.tab));
     if (st.tab === 'anomali') renderAnomali();
+    if (st.tab === 'profit') renderProfit();
     if (st.tab === 'store') renderStore();
     if (st.tab === 'item') renderItem();
     if (st.tab === 'bulan') renderBulan();
@@ -226,6 +258,60 @@
         (a.grafik ? '<button class="btn ghost" data-i="' + i + '">Lihat grafik</button>' : '') + '</div>' +
       '</article>').join('');
     $('#anList').querySelectorAll('button[data-i]').forEach(b => b.addEventListener('click', () => bukaGrafik(list[Number(b.dataset.i)].grafik, list[Number(b.dataset.i)])));
+  }
+
+  /* ---------- profit ---------- */
+  function renderProfit() {
+    const sc = st.scope, W = warnaStore(), D = st.data;
+    const stores = D.stores.filter(s => inStore(sc, s.kode));
+    const total = plScope(sc, sc.dari, sc.sampai);
+    $('#profitKosong').classList.toggle('hidden', total.adaBiaya);
+
+    const bulan = sc.bulan.length >= 6 ? sc.bulan : monthsBetween(shiftMonth(sc.sampai, -5), sc.sampai);
+    const tampil = stores.slice(0, 8);
+    const ds = tampil.map(s => ({
+      label: s.kode, borderColor: W[s.kode], backgroundColor: W[s.kode], spanGaps: true,
+      data: bulan.map(b => { const p = hitungPL(x => x === s.kode, b, b); return p.adaBiaya ? p.margin : p.lkPct; })
+    }));
+    ds.push({ label: 'Impas (0%)', data: bulan.map(() => 0), borderColor: css('--muted'), borderDash: [6, 4], borderWidth: 1.5, pointRadius: 0, pointHoverRadius: 0 });
+    gambar('chProfit', 'line', bulan.map(labelBulan), ds, { persen: true });
+    $('#profitNote').textContent = (total.adaBiaya ? 'laba operasional ÷ omzet' : 'belum ada biaya: yang tampil % laba kotor') +
+      (bulan.includes(today().slice(0, 7)) ? ' · bulan berjalan: biaya tetap dihitung proporsional' : '');
+
+    const rows = stores.map(s => Object.assign({ s }, hitungPL(x => x === s.kode, sc.dari, sc.sampai))).sort((a, b) => (b.margin ?? -9) - (a.margin ?? -9));
+    const td = (v, neg) => '<td class="n' + (neg && v < 0 ? ' neg' : '') + '">' + (v == null ? '–' : rp(v)) + '</td>';
+    const tdp = (v, neg) => '<td class="n' + (neg && v < 0 ? ' neg' : '') + '">' + pct(v) + '</td>';
+    const baris = (r, label) => '<td>' + label + '</td>' + td(r.omz) + td(r.hpp) + td(r.lk, true) + tdp(r.lkPct) +
+      td(r.kary) + td(r.tetap) + td(r.ops) + td(r.adaBiaya ? r.laba : null, true) + tdp(r.adaBiaya ? r.margin : null, true) +
+      tdp(r.omz > 0 && r.adaBiaya ? r.kary / r.omz : null);
+    $('#tbProfit').innerHTML = '<thead><tr><th>Outlet</th><th class="n">Omzet</th><th class="n">HPP bahan</th><th class="n">Laba kotor</th><th class="n">%</th>' +
+      '<th class="n">Karyawan</th><th class="n">Biaya tetap</th><th class="n">Biaya bulanan</th><th class="n">Laba operasional</th><th class="n">Margin</th><th class="n">Karyawan %</th></tr></thead><tbody>' +
+      rows.map(r => '<tr class="klik" data-s="' + esc(r.s.kode) + '">' + baris(r, '<span class="sw" style="background:' + W[r.s.kode] + '"></span><b>' + esc(r.s.kode) + '</b> ' + esc(r.s.nama)) + '</tr>').join('') +
+      '</tbody><tfoot><tr>' + baris(total, 'Total ' + (sc.storeSet ? 'outlet dipilih' : 'semua outlet')) + '</tr></tfoot>';
+    $('#tbProfit').querySelectorAll('tr.klik').forEach(tr => tr.addEventListener('click', () => bukaRincian(tr.dataset.s)));
+  }
+
+  function bukaRincian(kode) {
+    const sc = st.scope, s = st.data.stores.find(x => x.kode === kode);
+    const p = hitungPL(x => x === kode, sc.dari, sc.sampai);
+    const pos = [['HPP bahan baku', p.hpp]];
+    const perKat = (kelompok, prefix) => {
+      const g = Anomali.groupBy(p.by.filter(r => r.kelompok === kelompok), r => r.kategori);
+      return [...g.entries()].map(([k, rs]) => [prefix + k, sum(rs.map(r => r.jumlah))]).sort((a, b) => b[1] - a[1]);
+    };
+    pos.push(['Karyawan (total)', p.kary]);
+    perKat('Tetap', '').concat(perKat('Operasional', '')).forEach(x => pos.push(x));
+    const labels = pos.map(x => x[0]), vals = pos.map(x => p.omz > 0 ? x[1] / p.omz : null);
+    $('#gTitle').textContent = 'Struktur biaya ' + kode + ' · ' + labelBulan(sc.dari) + (sc.dari !== sc.sampai ? '–' + labelBulan(sc.sampai) : '');
+    $('#gSub').textContent = (s ? s.nama + ' · ' : '') + 'Semua biaya sebagai % dari omzet ' + rp(p.omz) + '. Laba operasional ' + rp(p.laba) + ' (' + pct(p.margin) + ').';
+    const d = $('#dlgChart'); if (!d.open) d.showModal();
+    gambar('chDetail', 'bar', labels, [{ label: '% omzet', data: vals, backgroundColor: css('--s1'), borderColor: css('--s1') }], { persen: true, horizontal: true });
+    const kary = perKat('Karyawan', '');
+    $('#tbDetail').innerHTML = '<thead><tr><th>Pos biaya</th><th class="n">Rupiah</th><th class="n">% omzet</th></tr></thead><tbody>' +
+      pos.map(x => '<tr><td>' + esc(x[0]) + '</td><td class="n">' + rp(x[1]) + '</td><td class="n">' + pct(p.omz ? x[1] / p.omz : null) + '</td></tr>').join('') +
+      kary.map(x => '<tr><td class="hint">&nbsp;&nbsp;↳ ' + esc(x[0]) + '</td><td class="n hint">' + rp(x[1]) + '</td><td class="n hint">' + pct(p.omz ? x[1] / p.omz : null) + '</td></tr>').join('') +
+      '</tbody><tfoot><tr><td>Laba operasional</td><td class="n' + (p.laba < 0 ? ' neg' : '') + '">' + rp(p.laba) + '</td><td class="n' + (p.laba < 0 ? ' neg' : '') + '">' + pct(p.margin) + '</td></tr></tfoot>';
+    $('.tbl-detail').open = true;
   }
 
   /* ---------- per outlet ---------- */
@@ -335,12 +421,14 @@
         interaction: { mode: 'index', intersect: false },
         plugins: {
           legend: { display: datasets.length > 1, position: 'bottom', labels: { usePointStyle: true, pointStyle: 'circle', boxWidth: 8, color: ink2, padding: 14 } },
-          tooltip: { callbacks: { label: c => ' ' + c.dataset.label + ': ' + fmt(c.parsed.y) } }
+          tooltip: { callbacks: { label: c => ' ' + c.dataset.label + ': ' + fmt(o.horizontal ? c.parsed.x : c.parsed.y) } }
         },
-        scales: {
-          x: { grid: { display: false }, border: { color: css('--line-strong') }, ticks: { color: muted, maxRotation: 0, autoSkip: true } },
-          y: { beginAtZero: !o.persen, grid: { color: grid }, border: { display: false }, ticks: { color: muted, callback: v => o.persen ? pct(v, 0) : rpS(v).replace('Rp', o.qty ? '' : 'Rp') } }
-        }
+        indexAxis: o.horizontal ? 'y' : 'x',
+        scales: (() => {
+          const kat = { grid: { display: false }, border: { color: css('--line-strong') }, ticks: { color: muted, maxRotation: 0, autoSkip: !o.horizontal } };
+          const nilai = { beginAtZero: !o.persen || o.horizontal, grid: { color: grid }, border: { display: false }, ticks: { color: muted, callback: v => o.persen ? pct(v, 0) : rpS(v).replace('Rp', o.qty ? '' : 'Rp') } };
+          return o.horizontal ? { x: nilai, y: kat } : { x: kat, y: nilai };
+        })()
       }
     });
   }
@@ -354,6 +442,7 @@
     const W = warnaStore(), D = st.data, sc = st.scope;
     const bulan6 = monthsBetween(shiftMonth(sc.sampai, -5), sc.sampai);
     let title = '', sub = anomali ? anomali.detail : '', labels = [], ds = [], opt = {}, fmt = rp;
+    $('.tbl-detail').open = false;
 
     if (g.tipe === 'harga') {
       const sat = (D.bahan.find(b => b.nama === g.bahan) || {}).satuan || '';
@@ -385,6 +474,18 @@
       const batas = D.batasFoodCost || 0.35;
       ds = [{ label: g.store, data: bulan6.map(b => { const bel = sum(D.belanja.filter(r => r.store === g.store && r.bulan === b).map(r => r.total)); const o = sum(D.omzet.filter(r => r.store === g.store && r.bulan === b).map(r => r.omzet)); return o > 0 ? bel / o : null; }), borderColor: W[g.store], backgroundColor: W[g.store], spanGaps: true },
         { label: 'Batas', data: bulan6.map(() => batas), borderColor: css('--muted'), borderDash: [6, 4], borderWidth: 1.5, pointRadius: 0 }];
+      opt = { persen: true }; fmt = v => pct(v);
+      gambarDetail('line', labels, ds, opt);
+    } else if (g.tipe === 'biaya') {
+      title = 'Biaya ' + g.kategori + ' ' + g.store + ' per bulan';
+      labels = bulan6.map(labelBulan);
+      ds = [{ label: g.kategori, data: bulan6.map(b => sum((D.biaya || []).filter(r => r.store === g.store && r.kategori === g.kategori && r.bulan === b).map(r => r.jumlah)) || null), backgroundColor: W[g.store], borderColor: W[g.store] }];
+      gambarDetail('bar', labels, ds, {});
+    } else if (g.tipe === 'margin') {
+      title = 'Margin operasional ' + g.store + ' per bulan';
+      labels = bulan6.map(labelBulan);
+      ds = [{ label: g.store, data: bulan6.map(b => { const p = hitungPL(x => x === g.store, b, b); return p.adaBiaya ? p.margin : null; }), borderColor: W[g.store], backgroundColor: W[g.store], spanGaps: true },
+        { label: 'Impas (0%)', data: bulan6.map(() => 0), borderColor: css('--muted'), borderDash: [6, 4], borderWidth: 1.5, pointRadius: 0 }];
       opt = { persen: true }; fmt = v => pct(v);
       gambarDetail('line', labels, ds, opt);
     } else if (g.tipe === 'kategori') {
@@ -424,6 +525,17 @@
         return b + ' ' + (o > 0 ? pct(bel / o) : 'omzet kosong');
       }).join(' | '));
     });
+    const plT = plScope(sc, sc.dari, sc.sampai);
+    if (plT.adaBiaya) {
+      baris.push('', 'Laba rugi periode ini (% dari omzet): total margin operasional ' + pct(plT.margin) + ', laba ' + rp(plT.laba) + '.');
+      stores.forEach(s => {
+        const p = hitungPL(x => x === s.kode, sc.dari, sc.sampai);
+        if (!p.omz) return;
+        baris.push('- ' + s.kode + ': omzet ' + rpS(p.omz) + ' | bahan ' + pct(p.hpp / p.omz) + ' | karyawan ' + pct(p.kary / p.omz) + ' | tetap/sewa ' + pct(p.tetap / p.omz) +
+          ' | bulanan ' + pct(p.ops / p.omz) + ' | margin ' + (p.adaBiaya ? pct(p.margin) : 'biaya belum diisi'));
+      });
+      baris.push('Margin per outlet per bulan: ' + stores.map(s => s.kode + ' ' + bulan3.map(b => { const p = hitungPL(x => x === s.kode, b, b); return p.adaBiaya ? pct(p.margin) : '–'; }).join('/')).join('; ') + ' (' + bulan3.join('/') + ').');
+    }
     baris.push('', 'Anomali terdeteksi: ' + st.anomali.length + ' (ditampilkan ' + Math.min(MAKS_ANOMALI_AI, st.anomali.length) + ' teratas, urut level lalu dampak):');
     st.anomali.slice(0, MAKS_ANOMALI_AI).forEach((x, i) => {
       baris.push((i + 1) + '. [' + x.level.toUpperCase() + '][' + JENIS_LABEL[x.dimensi] + '] ' + x.judul + ' (' + [x.bulan, x.store].filter(Boolean).join(', ') + '): ' + x.detail + (x.dampak ? ' Dampak ±' + rp(x.dampak) + '.' : ''));
@@ -446,7 +558,7 @@
     const cache = load(K.ai, {})[hash(e.teks + model)];
     const demo = st.data && st.data.demo;
     $('#aiMeta').innerHTML = 'Cuma jalan kalau tombol diklik. Yang dikirim hanya ringkasan ' + Math.min(MAKS_ANOMALI_AI, st.anomali.length) +
-      ' anomali teratas + food cost per outlet (±' + e.tokIn.toLocaleString('id-ID') + ' token, perkiraan ±$' + e.usd.toFixed(3) + ' per analisis).' +
+      ' anomali teratas + food cost & laba rugi per outlet (±' + e.tokIn.toLocaleString('id-ID') + ' token, perkiraan ±$' + e.usd.toFixed(3) + ' per analisis).' +
       (demo ? ' <b>Mode demo: sambungkan ke Google Sheet dulu untuk memakai AI.</b>' : '');
     $('#btnAI').disabled = !!demo || !st.anomali.length;
     $('#btnAI').textContent = cache ? 'Analisis ulang' : 'Analisis sekarang';

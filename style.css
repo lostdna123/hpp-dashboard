@@ -68,7 +68,7 @@ select,input[type=url],input[type=password],input[type=search]{display:block;wid
 select:focus,input:focus{outline:2px solid var(--accent);outline-offset:1px}
 
 /* KPI */
-.kpis{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px;margin-top:12px}
+.kpis{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:10px;margin-top:12px}
 .kpi{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:12px 14px;box-shadow:var(--shadow)}
 .kpi .l{font-size:12px;color:var(--muted);font-weight:600}
 .kpi .v{font-size:22px;font-weight:700;margin-top:2px;letter-spacing:-.01em}
@@ -151,14 +151,19 @@ dialog::backdrop{background:rgba(0,0,0,.45)}
 .foot{margin-top:24px;color:var(--muted);font-size:12px;text-align:center}
 
 @media (max-width:900px){
-  .kpis{grid-template-columns:repeat(2,minmax(0,1fr))}
-  .kpis .kpi:first-child{grid-column:1/-1}
+  .kpis{grid-template-columns:repeat(3,minmax(0,1fr))}
   .an-list{grid-template-columns:1fr}
 }
 @media (max-width:640px){
+  .kpis{grid-template-columns:repeat(2,minmax(0,1fr))}
   .filters{grid-template-columns:1fr 1fr}
   .actions .btn span{display:none}
   .chart-box{height:250px}
   .ai-ctrl{width:100%} .ai-ctrl select{flex:1;min-width:0}
   .meta{margin-left:0;width:100%}
 }
+
+tfoot td{font-weight:700;border-top:2px solid var(--line-strong);border-bottom:0}
+td.neg{color:var(--bad);font-weight:700}
+.kpi .v.neg{color:var(--bad)}
+#profitKosong ul{margin:6px 0;padding-left:20px}

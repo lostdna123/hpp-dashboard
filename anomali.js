@@ -295,6 +295,78 @@
       });
     });
 
+    // ===== H–J. Biaya operasional & margin (kalau data biaya sudah diisi) =====
+    const BY = data.biaya || [];
+    if (BY.length) {
+      // H. Biaya bulanan per kategori melonjak vs 3–6 bulan sebelumnya di outlet yang sama
+      const opsSKB = new Map();
+      BY.forEach(r => { if (r.kelompok !== 'Operasional') return; const k = r.store + '|' + r.kategori + '|' + r.bulan; opsSKB.set(k, (opsSKB.get(k) || 0) + r.jumlah); });
+      opsSKB.forEach((v, k) => {
+        const [store, kat, bulan] = k.split('|');
+        if (!inScopeBulan(bulan) || !inScopeStore(store)) return;
+        const prev = prevMonths(bulan, 6).map(b => opsSKB.get(store + '|' + kat + '|' + b)).filter(x => x > 0);
+        if (prev.length < 3) return;
+        const m = med(prev), rasio = v / m;
+        if (rasio < 1.4 || rz(v, prev) < 2.5 || v - m < 300000) return;
+        tambah({
+          jenis: 'biaya-melonjak', dimensi: 'store', level: rasio >= 2 ? 'tinggi' : rasio >= 1.6 ? 'sedang' : 'rendah',
+          store: store, bulan: bulan, kategori: kat, dampak: v - m,
+          judul: 'Biaya ' + kat + ' ' + store + ' naik ' + pct(rasio - 1) + ' di ' + bulan,
+          detail: kat + ' ' + rp(v) + ' vs biasanya ' + rp(m) + ' per bulan. Cek tagihan & penyebabnya (alat rusak, tarif naik, salah input).',
+          grafik: { tipe: 'biaya', store: store, kategori: kat }
+        });
+      });
+
+      // I. Margin operasional per outlet per bulan
+      const biayaSB = new Map(), karySB = new Map(), lengkapSB = new Set();
+      BY.forEach(r => {
+        const k = r.store + '|' + r.bulan;
+        biayaSB.set(k, (biayaSB.get(k) || 0) + r.jumlah);
+        if (r.kelompok === 'Karyawan') karySB.set(k, (karySB.get(k) || 0) + r.jumlah);
+        if (r.kelompok !== 'Operasional') lengkapSB.add(k);
+      });
+      const marginSB = new Map();
+      omzetSB.forEach((o, k) => { if (o > 0 && lengkapSB.has(k)) marginSB.set(k, (o - (belanjaSB.get(k) || 0) - (biayaSB.get(k) || 0)) / o); });
+      marginSB.forEach((mg, k) => {
+        const [store, bulan] = k.split('|');
+        if (!inScopeBulan(bulan) || !inScopeStore(store) || bulan === bulanIni) return; // bulan berjalan: omzet belum penuh
+        const o = omzetSB.get(k), laba = mg * o, alasan = [];
+        let skor = 0, dampak = 0;
+        if (mg < 0) { alasan.push('RUGI ' + rp(-laba)); skor += 3; dampak = -laba; }
+        const prev = prevMonths(bulan, 6).filter(b => marginSB.has(store + '|' + b)).map(b => marginSB.get(store + '|' + b));
+        if (prev.length >= 3) {
+          const m = med(prev);
+          if (m - mg >= 0.05 && rz(mg, prev) <= -2) {
+            alasan.push('turun ' + ((m - mg) * 100).toFixed(1).replace('.', ',') + ' poin dari biasanya ' + pct(m, 1));
+            skor += m - mg >= 0.08 ? 2 : 1; dampak = Math.max(dampak, (m - mg) * o);
+          }
+        }
+        const kp = (karySB.get(k) || 0) / o;
+        if (kp > 0.3) { alasan.push('biaya karyawan ' + pct(kp, 1) + ' dari omzet'); skor += 1; }
+        if (!alasan.length) return;
+        const hariO = (hariOmzetSB.get(k) || new Set()).size;
+        tambah({
+          jenis: 'margin', dimensi: 'store', level: skor >= 3 ? 'tinggi' : skor >= 2 ? 'sedang' : 'rendah',
+          store: store, bulan: bulan, dampak: dampak,
+          judul: 'Margin ' + store + ' ' + pct(mg, 1) + ' di ' + bulan,
+          detail: 'Margin operasional ' + alasan.join('; ') + '. Omzet ' + rp(o) + ', laba operasional ' + rp(laba) + '.' +
+            (daysInMonth(bulan) - hariO >= 3 ? ' Catatan: omzet cuma terisi ' + hariO + ' hari, margin bisa kekecilan.' : ''),
+          grafik: { tipe: 'margin', store: store }
+        });
+      });
+
+      // J. Kualitas data: omzet ada tapi biaya karyawan/sewa belum diisi
+      omzetSB.forEach((o, k) => {
+        const [store, bulan] = k.split('|');
+        if (!inScopeBulan(bulan) || !inScopeStore(store) || lengkapSB.has(k) || !(o > 0)) return;
+        tambah({
+          jenis: 'biaya-kosong', dimensi: 'data', level: 'rendah', store: store, bulan: bulan, dampak: 0,
+          judul: 'Biaya karyawan & sewa ' + store + ' belum diisi (' + bulan + ')',
+          detail: 'Isi MASTER_KARYAWAN dan BIAYA_TETAP untuk outlet ini supaya laba & margin bisa dihitung.'
+        });
+      });
+    }
+
     hasil.forEach(a => { a.namaStore = a.store ? (namaStore[a.store] || a.store) : ''; a.dampak = Math.max(0, Math.round(a.dampak || 0)); });
     // satu masalah harga (outlet+bahan+bulan) cukup tampil sekali: ambil yang dampaknya terbesar
     const hargaTerbaik = new Map();

@@ -1,0 +1,658 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<base target="_top">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#B3401F">
+<title>Input HPP Store</title>
+<style>
+:root{
+  --bg:#F5F1EA; --card:#FFFFFF; --ink:#1F1A17; --muted:#6F665E; --line:#E4DDD2; --field:#FBF9F6;
+  --pri:#B3401F; --pri-ink:#FFFFFF; --pri-soft:#FBE7DF;
+  --ok:#1F7A4D; --ok-soft:#E3F3EA; --warn:#8A5A00; --warn-soft:#FFF4D6; --err:#B42318; --err-soft:#FDE8E6;
+  --r:14px;
+}
+@media (prefers-color-scheme: dark){
+  :root{
+    --bg:#171412; --card:#221E1B; --ink:#F3EEE8; --muted:#A99F95; --line:#3A332E; --field:#1B1816;
+    --pri:#E0673F; --pri-ink:#1A0E09; --pri-soft:#3A241B;
+    --ok:#5CC08C; --ok-soft:#16301F; --warn:#E3B341; --warn-soft:#352A10; --err:#F07B6E; --err-soft:#3A1C19;
+  }
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--ink);
+  font:16px/1.4 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",sans-serif;-webkit-text-size-adjust:100%}
+button,input,select{font:inherit;color:inherit}
+.wrap{max-width:560px;margin:0 auto;padding:0 16px}
+.hidden{display:none !important}
+
+/* header */
+.top{position:sticky;top:0;z-index:5;background:var(--bg);padding:14px 0 8px}
+.top .head{display:flex;align-items:center;gap:12px}
+.logo{width:40px;height:40px;border-radius:12px;background:var(--pri);color:var(--pri-ink);display:grid;place-items:center;font-weight:800;font-size:15px;flex:none}
+.who{flex:1;min-width:0}
+.who .store{font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.who .sub{color:var(--muted);font-size:13px}
+.ghost{background:none;border:1px solid var(--line);border-radius:10px;padding:8px 12px;font-size:14px;cursor:pointer}
+.tabs{display:flex;gap:6px;margin-top:10px;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:4px}
+.tabs button{flex:1;border:0;background:none;padding:10px 4px;border-radius:9px;font-weight:600;color:var(--muted);cursor:pointer}
+.tabs button.on{background:var(--pri-soft);color:var(--pri)}
+.badge{display:inline-block;min-width:20px;padding:1px 6px;border-radius:99px;background:var(--err);color:#fff;font-size:12px;margin-left:4px}
+
+.ribbon{margin:8px 0 0;padding:10px 12px;border-radius:10px;font-size:14px}
+.ribbon.warn{background:var(--warn-soft);color:var(--warn)}
+.ribbon.err{background:var(--err-soft);color:var(--err)}
+
+/* cards & fields */
+main{padding-bottom:110px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:14px;margin-top:12px}
+label{display:block;font-size:13px;color:var(--muted);font-weight:600}
+label + label{margin-top:12px}
+input,select{display:block;width:100%;margin-top:6px;padding:12px;border:1px solid var(--line);border-radius:10px;background:var(--field);font-size:16px;min-height:48px;outline:none}
+input:focus,select:focus{border-color:var(--pri);box-shadow:0 0 0 3px var(--pri-soft)}
+input.big{font-size:22px;font-weight:700}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.row2 label + label{margin-top:0}
+.hint{font-size:13px;color:var(--muted);margin:8px 0 0}
+.section-title{display:flex;justify-content:space-between;align-items:baseline;margin:18px 2px 0}
+.section-title b{font-size:15px}
+.section-title span{font-size:13px;color:var(--muted)}
+
+/* item rows */
+.item{position:relative}
+.item.bad{border-color:var(--err);box-shadow:0 0 0 2px var(--err-soft)}
+.itop{display:flex;gap:8px;align-items:center}
+.itop .no{flex:none;width:26px;height:26px;border-radius:99px;background:var(--pri-soft);color:var(--pri);display:grid;place-items:center;font-size:13px;font-weight:700}
+.itop select{margin-top:0;font-weight:600}
+.itop select.kosong{color:var(--muted);font-weight:500}
+.satuanBox{display:flex;align-items:center;margin-top:6px;min-height:48px;padding:10px;border:1px dashed var(--line);border-radius:10px;color:var(--ink);font-size:16px;font-weight:600}
+.itop .x{flex:none;width:40px;height:48px;border:0;background:none;font-size:18px;color:var(--muted);cursor:pointer}
+.igrid{display:grid;grid-template-columns:1fr 1fr 1.4fr;gap:8px;margin-top:10px}
+.igrid label + label{margin-top:0}
+.igrid input,.igrid select{padding:10px}
+.ifoot{display:flex;justify-content:space-between;gap:10px;align-items:flex-start;margin-top:8px}
+.ifoot .hint{margin:0}
+.ifoot .hint.warn{color:var(--warn)}
+.ifoot .sub{white-space:nowrap}
+.add{display:block;width:100%;margin-top:12px;padding:14px;border:2px dashed var(--line);border-radius:var(--r);background:none;color:var(--pri);font-weight:700;cursor:pointer}
+
+.fotoBtn{display:flex;align-items:center;justify-content:center;gap:8px;margin-top:6px;padding:12px;border:1px solid var(--line);border-radius:10px;background:var(--field);color:var(--ink);font-size:15px;cursor:pointer}
+.fotoPrev{display:flex;gap:12px;align-items:center;margin-top:8px}
+.fotoPrev img{width:72px;height:72px;object-fit:cover;border-radius:10px;border:1px solid var(--line)}
+
+/* sticky submit */
+.bar{position:fixed;left:0;right:0;bottom:0;z-index:6;background:linear-gradient(to top,var(--bg) 70%,transparent);padding:16px 0 calc(14px + env(safe-area-inset-bottom))}
+.primary{display:block;width:100%;padding:16px;border:0;border-radius:var(--r);background:var(--pri);color:var(--pri-ink);font-weight:800;font-size:17px;cursor:pointer}
+.primary:disabled{opacity:.6}
+.total{display:flex;justify-content:space-between;margin:0 2px 8px;font-size:14px;color:var(--muted)}
+.total b{color:var(--ink);font-size:17px}
+
+/* lists */
+.li{display:flex;justify-content:space-between;gap:10px;padding:12px 0;border-top:1px solid var(--line)}
+.li:first-of-type{border-top:0}
+.li .t{font-weight:600}
+.li .m{font-size:13px;color:var(--muted)}
+.li .e{font-size:13px;color:var(--err)}
+.pill{font-size:12px;padding:2px 8px;border-radius:99px;white-space:nowrap;align-self:flex-start}
+.pill.ok{background:var(--ok-soft);color:var(--ok)}
+.pill.q{background:var(--warn-soft);color:var(--warn)}
+.empty{color:var(--muted);font-size:14px;padding:8px 0 0}
+.qhead{display:flex;justify-content:space-between;align-items:center;gap:8px}
+
+/* overlay setup */
+.overlay{position:fixed;inset:0;z-index:20;background:rgba(0,0,0,.45);display:flex;align-items:flex-end;justify-content:center}
+.sheet{width:100%;max-width:560px;background:var(--card);border-radius:20px 20px 0 0;padding:20px 16px calc(20px + env(safe-area-inset-bottom));max-height:92vh;overflow:auto}
+.sheet h2{margin:0 0 4px;font-size:20px}
+.sheet .primary{margin-top:16px}
+.sheet .ghost{width:100%;margin-top:8px;padding:12px}
+.err{margin-top:12px;padding:10px 12px;border-radius:10px;background:var(--err-soft);color:var(--err);font-size:14px}
+
+.toast{position:fixed;left:50%;bottom:110px;transform:translateX(-50%);z-index:30;max-width:calc(100% - 32px);padding:12px 16px;border-radius:12px;font-size:15px;font-weight:600;box-shadow:0 6px 24px rgba(0,0,0,.18)}
+.toast.ok{background:var(--ok);color:#fff}
+.toast.warn{background:var(--warn-soft);color:var(--warn);border:1px solid var(--warn)}
+.toast.err{background:var(--err);color:#fff}
+
+@media (max-width:380px){ .igrid{grid-template-columns:1fr 1fr} .igrid label:last-child{grid-column:1 / -1} }
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="wrap head">
+    <div class="logo" id="hLogo">HPP</div>
+    <div class="who">
+      <div class="store" id="hStore">Belum pilih store</div>
+      <div class="sub" id="hSub">Ketuk "Ganti" untuk setup</div>
+    </div>
+    <button class="ghost" id="btnGanti">Ganti</button>
+  </div>
+  <div class="wrap">
+    <div id="ribDemo" class="ribbon warn hidden">Mode demo — data tidak dikirim. Versi asli dibuka lewat URL web app Google.</div>
+    <div id="ribNet" class="ribbon err hidden"></div>
+    <nav class="tabs">
+      <button data-tab="belanja" class="on">Belanja</button>
+      <button data-tab="omzet">Omzet</button>
+      <button data-tab="riwayat">Riwayat<span id="qBadge" class="badge hidden">0</span></button>
+    </nav>
+  </div>
+</header>
+
+<main class="wrap">
+  <!-- ========== BELANJA ========== -->
+  <section id="tab-belanja">
+    <div class="card">
+      <div class="row2">
+        <label>Tanggal belanja<input type="date" id="bTgl"></label>
+        <label>Supplier / pasar<input id="bSupplier" placeholder="opsional"></label>
+      </div>
+    </div>
+
+    <div class="section-title"><b>Bahan yang dibeli</b><span>harga per satuan</span></div>
+    <div id="items"></div>
+    <button class="add" id="btnAdd">+ Tambah bahan</button>
+    <p class="hint">Bahan nggak ada di daftar? Minta HO tambahin di sheet MASTER_BAHAN, lalu buka ulang app.</p>
+
+    <div class="card">
+      <label>Foto nota (opsional)</label>
+      <label class="fotoBtn" for="bFoto" id="fotoBtn">📷 Foto nota</label>
+      <input type="file" id="bFoto" accept="image/*" capture="environment" hidden>
+      <div class="fotoPrev hidden" id="fotoPrev">
+        <img id="fotoImg" alt="Foto nota">
+        <button class="ghost" id="fotoDel">Hapus foto</button>
+      </div>
+      <label>Catatan<input id="bCatatan" placeholder="opsional, mis. cabe naik"></label>
+    </div>
+
+    <div class="bar"><div class="wrap">
+      <div class="total"><span id="bCount">0 bahan</span><b id="bTotal">Rp 0</b></div>
+      <button class="primary" id="btnKirimB">Kirim belanja</button>
+    </div></div>
+  </section>
+
+  <!-- ========== OMZET ========== -->
+  <section id="tab-omzet" class="hidden">
+    <div class="card">
+      <label>Tanggal<input type="date" id="oTgl"></label>
+      <label>Omzet hari itu (Rp)<input id="oOmzet" class="big" inputmode="numeric" placeholder="0" autocomplete="off"></label>
+      <label>Jumlah struk / transaksi<input id="oStruk" inputmode="numeric" placeholder="opsional" autocomplete="off"></label>
+      <label>Catatan<input id="oCatatan" placeholder="opsional, mis. hujan deras"></label>
+      <p class="hint">Isi sekali sehari setelah tutup. Kirim ulang tanggal yang sama = angka lama diganti.</p>
+    </div>
+    <div class="bar"><div class="wrap">
+      <button class="primary" id="btnKirimO">Kirim omzet</button>
+    </div></div>
+  </section>
+
+  <!-- ========== RIWAYAT ========== -->
+  <section id="tab-riwayat" class="hidden">
+    <div class="card">
+      <div class="qhead"><b>Belum terkirim</b><button class="ghost" id="btnFlush">Kirim sekarang</button></div>
+      <div id="qList"></div>
+    </div>
+    <div class="card">
+      <b>Terkirim dari HP ini</b>
+      <div id="hList"></div>
+    </div>
+  </section>
+</main>
+
+<!-- ========== SETUP ========== -->
+<div id="setup" class="overlay hidden">
+  <div class="sheet">
+    <h2>Setup HP ini</h2>
+    <p class="hint">Cukup sekali. Minta PIN outlet ke tim HO.</p>
+    <label>Brand<select id="sBrand"></select></label>
+    <label>Outlet<select id="sStore"></select></label>
+    <label>PIN outlet<input id="sPin" type="password" inputmode="numeric" maxlength="8" autocomplete="off"></label>
+    <label>Nama kamu<input id="sPic" placeholder="mis. Andi" autocomplete="name"></label>
+    <div id="sErr" class="err hidden"></div>
+    <button class="primary" id="sOk">Mulai</button>
+    <button class="ghost" id="sBatal">Batal</button>
+  </div>
+</div>
+
+<div id="toast" class="toast hidden"></div>
+
+<script>
+/* ============ KONFIG & UTIL ============ */
+const IS_GAS = typeof google !== 'undefined' && google.script && google.script.run;
+const K = { cfg: 'hpp.cfg', master: 'hpp.master', queue: 'hpp.queue', hist: 'hpp.hist' };
+
+const $ = s => document.querySelector(s);
+const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const rp = n => 'Rp ' + Math.round(n || 0).toLocaleString('id-ID');
+const pad = n => String(n).padStart(2, '0');
+const today = () => { const d = new Date(); return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()); };
+const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+
+function load(k, d) { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch (e) { return d; } }
+function save(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); return true; } catch (e) { return false; } }
+
+function parseQty(s) {
+  s = String(s || '').trim().replace(/\s/g, '');
+  if (!s) return NaN;
+  if (s.includes(',')) s = s.replace(/\./g, '').replace(',', '.');   // "1,5" → 1.5
+  return Number(s);
+}
+const parseRp = s => { const d = String(s || '').replace(/\D/g, ''); return d ? Number(d) : NaN; };
+function fmtRpInput(el) { const d = el.value.replace(/\D/g, ''); el.value = d ? Number(d).toLocaleString('id-ID') : ''; }
+
+const errMsg = e => String((e && e.message) || e || 'Error').replace(/^Error:\s*/, '').replace('[VALIDASI] ', '');
+const isValidasi = e => String((e && e.message) || e || '').includes('[VALIDASI]');
+
+let toastT;
+function toast(msg, type) {
+  const t = $('#toast'); t.textContent = msg; t.className = 'toast ' + (type || 'ok');
+  clearTimeout(toastT); toastT = setTimeout(() => t.classList.add('hidden'), type === 'err' ? 5000 : 3000);
+}
+
+/* ============ SERVER CALL (asli / demo) ============ */
+function call(fn, ...args) {
+  if (!IS_GAS) return demo(fn, args);
+  return new Promise((res, rej) =>
+    google.script.run.withSuccessHandler(res).withFailureHandler(rej)[fn](...args));
+}
+
+const DEMO = {
+  stores: [
+    { kode: 'UG-01', brand: 'Uri Gukbap', nama: 'Uri Gukbap - Outlet 1' },
+    { kode: 'UG-02', brand: 'Uri Gukbap', nama: 'Uri Gukbap - Outlet 2' },
+    { kode: 'AW-01', brand: 'Bakmi Awei 88', nama: 'Bakmi Awei 88 - Outlet 1' },
+    { kode: 'BB-01', brand: 'Baboy', nama: 'Baboy - Outlet 1' },
+    { kode: 'DW-01', brand: 'Bakmi Dua Wajah', nama: 'Bakmi Dua Wajah - Outlet 1' }
+  ],
+  bahan: [
+    ['Daging babi samcan', 'Protein', 'kg', 'Semua', 125000], ['Tulang babi', 'Protein', 'kg', 'Semua', 0],
+    ['Babi cincang', 'Protein', 'kg', 'Semua', 0], ['Telur ayam', 'Protein', 'kg', 'Semua', 0],
+    ['Cabe hijau', 'Sayur & Bumbu Segar', 'kg', 'Semua', 40000], ['Cabe rawit merah', 'Sayur & Bumbu Segar', 'kg', 'Semua', 0],
+    ['Bawang putih', 'Sayur & Bumbu Segar', 'kg', 'Semua', 0], ['Bawang merah', 'Sayur & Bumbu Segar', 'kg', 'Semua', 0],
+    ['Daun bawang', 'Sayur & Bumbu Segar', 'kg', 'Semua', 0], ['Sawi hijau (caisim)', 'Sayur & Bumbu Segar', 'kg', 'Semua', 0],
+    ['Beras', 'Karbohidrat', 'kg', 'Semua', 0], ['Mie bakmi mentah', 'Karbohidrat', 'kg', 'Bakmi Awei 88, Bakmi Dua Wajah', 0],
+    ['Kulit pangsit', 'Karbohidrat', 'pack', 'Bakmi Awei 88, Bakmi Dua Wajah', 0],
+    ['Kimchi', 'Saus & Bumbu Jadi', 'kg', 'Uri Gukbap', 0], ['Gochujang', 'Saus & Bumbu Jadi', 'kg', 'Uri Gukbap', 0],
+    ['Minyak goreng', 'Saus & Bumbu Jadi', 'liter', 'Semua', 0], ['Gas LPG 12 kg', 'Operasional & Packaging', 'tabung', 'Semua', 0]
+  ].map(r => ({ nama: r[0], kategori: r[1], satuan: r[2], brand: r[3], acuan: r[4] })),
+  hargaTerakhir: { 'Daging babi samcan': { harga: 118000, satuan: 'kg' }, 'Cabe hijau': { harga: 36000, satuan: 'kg' } }
+};
+function demo(fn, args) {
+  return new Promise((res, rej) => setTimeout(() => {
+    if (fn === 'getMasterData') return res(DEMO);
+    if (fn === 'verifyStore') {
+      const s = DEMO.stores.find(x => x.kode === args[0]);
+      return args[1] ? res(s) : rej(new Error('[VALIDASI] Isi PIN (demo: angka apa saja)'));
+    }
+    res({ ok: true });
+  }, 450));
+}
+
+/* ============ STATE ============ */
+let cfg = load(K.cfg, null);
+let master = load(K.master, null);
+let fotoData = null;
+const itemsEl = $('#items');
+
+/* ============ HEADER & TABS ============ */
+function renderHeader() {
+  if (cfg) {
+    $('#hStore').textContent = cfg.nama;
+    $('#hSub').textContent = cfg.pic + ' · ' + cfg.kode;
+    $('#hLogo').textContent = cfg.kode.split('-')[0];
+  } else {
+    $('#hStore').textContent = 'Belum pilih store';
+    $('#hSub').textContent = 'Ketuk "Ganti" untuk setup';
+    $('#hLogo').textContent = 'HPP';
+  }
+}
+document.querySelectorAll('.tabs button').forEach(b => b.addEventListener('click', () => {
+  document.querySelectorAll('.tabs button').forEach(x => x.classList.toggle('on', x === b));
+  ['belanja', 'omzet', 'riwayat'].forEach(t => $('#tab-' + t).classList.toggle('hidden', t !== b.dataset.tab));
+  if (b.dataset.tab === 'riwayat') { renderQueue(); renderHist(); }
+  window.scrollTo(0, 0);
+}));
+
+/* ============ SETUP ============ */
+function openSetup() {
+  const stores = (master && master.stores) || [];
+  $('#sErr').classList.add('hidden');
+  if (!stores.length) {
+    $('#sErr').textContent = 'Data outlet belum bisa diambil. Pastikan ada internet, lalu buka ulang app.';
+    $('#sErr').classList.remove('hidden');
+  }
+  const brands = [...new Set(stores.map(s => s.brand))];
+  $('#sBrand').innerHTML = brands.map(b => '<option>' + esc(b) + '</option>').join('');
+  if (cfg && brands.includes(cfg.brand)) $('#sBrand').value = cfg.brand;
+  fillStores();
+  if (cfg) { $('#sStore').value = cfg.kode; $('#sPic').value = cfg.pic; }
+  $('#sPin').value = '';
+  $('#sBatal').classList.toggle('hidden', !cfg);
+  $('#setup').classList.remove('hidden');
+}
+function fillStores() {
+  const brand = $('#sBrand').value;
+  const list = ((master && master.stores) || []).filter(s => s.brand === brand);
+  $('#sStore').innerHTML = list.map(s => '<option value="' + esc(s.kode) + '">' + esc(s.nama) + '</option>').join('');
+}
+$('#sBrand').addEventListener('change', fillStores);
+$('#btnGanti').addEventListener('click', openSetup);
+$('#sBatal').addEventListener('click', () => $('#setup').classList.add('hidden'));
+$('#sOk').addEventListener('click', async () => {
+  const kode = $('#sStore').value, pin = $('#sPin').value.trim(), pic = $('#sPic').value.trim();
+  const err = $('#sErr');
+  err.classList.add('hidden');
+  if (!kode) { err.textContent = 'Pilih outlet dulu.'; err.classList.remove('hidden'); return; }
+  if (!pic) { err.textContent = 'Isi nama kamu dulu.'; err.classList.remove('hidden'); return; }
+  const btn = $('#sOk'); btn.disabled = true; btn.textContent = 'Mengecek…';
+  try {
+    const s = await call('verifyStore', kode, pin);
+    cfg = { kode: s.kode, nama: s.nama, brand: s.brand, pin: pin, pic: pic };
+    save(K.cfg, cfg);
+    $('#setup').classList.add('hidden');
+    renderHeader();
+    toast('Siap dipakai: ' + s.nama, 'ok');
+    refreshMaster();
+  } catch (e) {
+    err.textContent = isValidasi(e) ? errMsg(e) : 'Tidak bisa cek ke server. Setup pertama butuh internet. (' + errMsg(e) + ')';
+    err.classList.remove('hidden');
+  } finally { btn.disabled = false; btn.textContent = 'Mulai'; }
+});
+
+/* ============ MASTER ============ */
+async function refreshMaster() {
+  try {
+    const m = await call('getMasterData', cfg ? cfg.kode : '');
+    master = m; save(K.master, m);
+    $('#ribNet').classList.add('hidden');
+  } catch (e) {
+    if (!master) { $('#ribNet').textContent = 'Gagal ambil data master (' + errMsg(e) + '). Cek sinyal lalu buka ulang.'; $('#ribNet').classList.remove('hidden'); }
+  }
+  refreshBahanSelects();
+}
+function bahanUntukBrand() {
+  if (!master) return [];
+  const brand = cfg ? cfg.brand.toLowerCase() : '';
+  return master.bahan.filter(b => !brand || /^semua$/i.test(b.brand || 'Semua') ||
+    String(b.brand).split(',').map(x => x.trim().toLowerCase()).includes(brand));
+}
+/** Dropdown bahan, dikelompokkan per kategori sesuai urutan di MASTER_BAHAN. */
+function bahanOptionsHtml() {
+  const list = bahanUntukBrand();
+  if (!list.length) return '<option value="">Daftar bahan belum ke-load</option>';
+  const groups = {};
+  list.forEach(b => { (groups[b.kategori] = groups[b.kategori] || []).push(b); });
+  return '<option value="">— Pilih bahan —</option>' + Object.keys(groups).map(k =>
+    '<optgroup label="' + esc(k) + '">' +
+    groups[k].map(b => '<option value="' + esc(b.nama) + '">' + esc(b.nama) + ' (' + esc(b.satuan) + ')</option>').join('') +
+    '</optgroup>').join('');
+}
+function refreshBahanSelects() {
+  const html = bahanOptionsHtml();
+  [...itemsEl.children].forEach(el => {
+    const s = el.querySelector('.bahan'), v = s.value;
+    s.innerHTML = html;
+    s.value = v;
+    if (s.value !== v) s.value = '';   // bahan sudah dinonaktifkan HO
+  });
+  [...itemsEl.children].forEach(el => refreshItem(el));
+  updateTotal();
+}
+const findBahan = nama => master && master.bahan.find(b => b.nama === nama);
+
+/* ============ ITEM BELANJA ============ */
+function addItem(focus) {
+  const el = document.createElement('div');
+  el.className = 'item card';
+  el.innerHTML =
+    '<div class="itop"><span class="no"></span>' +
+      '<select class="bahan kosong" aria-label="Pilih bahan">' + bahanOptionsHtml() + '</select>' +
+      '<button class="x" title="Hapus baris" aria-label="Hapus baris">✕</button></div>' +
+    '<div class="igrid">' +
+      '<label>Qty<input class="qty" inputmode="decimal" placeholder="0" autocomplete="off"></label>' +
+      '<label>Satuan<div class="satuanBox">–</div></label>' +
+      '<label>Harga / <span class="satLbl">satuan</span><input class="harga" inputmode="numeric" placeholder="0" autocomplete="off"></label>' +
+    '</div>' +
+    '<div class="ifoot"><p class="hint"></p><b class="sub">Rp 0</b></div>';
+
+  el.querySelector('.x').addEventListener('click', () => {
+    el.remove();
+    if (!itemsEl.children.length) addItem();
+    renumber(); [...itemsEl.children].forEach(x => refreshItem(x)); updateTotal();
+  });
+  el.querySelector('.bahan').addEventListener('change', () => {
+    [...itemsEl.children].forEach(x => refreshItem(x));   // cek dobel di semua baris
+    updateTotal();
+    if (el.querySelector('.bahan').value) el.querySelector('.qty').focus();
+  });
+  el.querySelector('.qty').addEventListener('input', () => { refreshItem(el); updateTotal(); });
+  const h = el.querySelector('.harga');
+  h.addEventListener('input', () => { fmtRpInput(h); refreshItem(el); updateTotal(); });
+
+  itemsEl.appendChild(el);
+  renumber();
+  refreshItem(el);
+  if (focus) el.querySelector('.bahan').focus();
+  return el;
+}
+function renumber() { [...itemsEl.children].forEach((el, i) => { el.querySelector('.no').textContent = i + 1; }); }
+function refreshItem(el) {
+  const sel = el.querySelector('.bahan');
+  const nama = sel.value;
+  const m = findBahan(nama);
+  sel.classList.toggle('kosong', !nama);
+  el.querySelector('.satuanBox').textContent = m ? m.satuan : '–';
+  el.querySelector('.satLbl').textContent = m ? m.satuan : 'satuan';
+
+  const qty = parseQty(el.querySelector('.qty').value), harga = parseRp(el.querySelector('.harga').value);
+  const last = m && master.hargaTerakhir && master.hargaTerakhir[m.nama];
+  const rows = [...itemsEl.children];
+  const dobel = nama ? rows.findIndex(x => x !== el && x.querySelector('.bahan').value === nama) : -1;
+
+  const info = []; let warn = false;
+  if (dobel > -1 && dobel < rows.indexOf(el)) { info.push('⚠ sama dengan bahan no. ' + (dobel + 1)); warn = true; }
+  if (last && last.harga) info.push('Terakhir ' + rp(last.harga) + '/' + m.satuan);
+  if (m && m.acuan && harga > m.acuan * 1.2) { info.push('⚠ ' + Math.round((harga / m.acuan - 1) * 100) + '% di atas acuan'); warn = true; }
+
+  const hint = el.querySelector('.hint');
+  hint.textContent = info.join(' · ');
+  hint.classList.toggle('warn', warn);
+  el.querySelector('.harga').placeholder = last && last.harga ? Number(last.harga).toLocaleString('id-ID') : '0';
+  el.querySelector('.sub').textContent = (qty > 0 && harga > 0) ? rp(qty * harga) : 'Rp 0';
+  if (nama || qty || harga) el.classList.remove('bad');
+}
+function collectItems() {
+  const rows = [], errs = [];
+  [...itemsEl.children].forEach((el, i) => {
+    const bahan = el.querySelector('.bahan').value;
+    const qs = el.querySelector('.qty').value, hs = el.querySelector('.harga').value;
+    el.classList.remove('bad');
+    if (!bahan && !qs && !hs) return; // baris kosong diabaikan
+    const qty = parseQty(qs), harga = parseRp(hs), m = findBahan(bahan);
+    if (!m || !(qty > 0) || !(harga > 0)) { errs.push(i + 1); el.classList.add('bad'); return; }
+    rows.push({ bahan: m.nama, qty: qty, satuan: m.satuan, harga: harga });
+  });
+  return { rows, errs };
+}
+function updateTotal() {
+  let n = 0, total = 0;
+  [...itemsEl.children].forEach(el => {
+    const q = parseQty(el.querySelector('.qty').value), h = parseRp(el.querySelector('.harga').value);
+    if (el.querySelector('.bahan').value.trim() && q > 0 && h > 0) { n++; total += q * h; }
+  });
+  $('#bCount').textContent = n + ' bahan';
+  $('#bTotal').textContent = rp(total);
+}
+$('#btnAdd').addEventListener('click', () => addItem(true));
+
+/* ============ FOTO NOTA ============ */
+function compress(file, max, q) {
+  return new Promise((res, rej) => {
+    const img = new Image(), url = URL.createObjectURL(file);
+    img.onload = () => {
+      const s = Math.min(1, max / Math.max(img.width, img.height));
+      const c = document.createElement('canvas');
+      c.width = Math.round(img.width * s); c.height = Math.round(img.height * s);
+      c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+      URL.revokeObjectURL(url);
+      res(c.toDataURL('image/jpeg', q));
+    };
+    img.onerror = rej; img.src = url;
+  });
+}
+$('#bFoto').addEventListener('change', async e => {
+  const f = e.target.files && e.target.files[0];
+  if (!f) return;
+  try {
+    const dataUrl = await compress(f, 1280, 0.7);
+    fotoData = { data: dataUrl.split(',')[1], mimeType: 'image/jpeg' };
+    $('#fotoImg').src = dataUrl;
+    $('#fotoPrev').classList.remove('hidden'); $('#fotoBtn').classList.add('hidden');
+  } catch (err) { toast('Foto gagal diproses, coba lagi', 'err'); }
+  e.target.value = '';
+});
+function clearFoto() {
+  fotoData = null; $('#fotoImg').removeAttribute('src');
+  $('#fotoPrev').classList.add('hidden'); $('#fotoBtn').classList.remove('hidden');
+}
+$('#fotoDel').addEventListener('click', clearFoto);
+
+/* ============ KIRIM ============ */
+async function kirim(btn, jenis, fn, payload, info, onDone) {
+  const label = btn.textContent;
+  btn.disabled = true; btn.textContent = 'Mengirim…';
+  try {
+    await call(fn, payload);
+    addHist(Object.assign({}, info, { jenis: jenis, waktu: Date.now(), status: 'terkirim' }));
+    toast('Terkirim ✓', 'ok');
+    onDone();
+  } catch (e) {
+    if (isValidasi(e)) {
+      toast(errMsg(e), 'err');
+    } else {
+      const ok = enqueue({ id: payload.idKiriman, jenis: jenis, fn: fn, payload: payload, info: info, error: errMsg(e) });
+      if (ok) { toast('Sinyal bermasalah — disimpan di HP, dikirim otomatis nanti', 'warn'); onDone(); }
+      else toast('Gagal kirim & memori HP penuh: ' + errMsg(e), 'err');
+    }
+  } finally {
+    btn.disabled = false; btn.textContent = label;
+    renderQueue();
+  }
+}
+
+$('#btnKirimB').addEventListener('click', () => {
+  if (!cfg) return openSetup();
+  const { rows, errs } = collectItems();
+  if (errs.length) return toast('Lengkapi bahan no. ' + errs.join(', ') + ' (pilih bahan, isi qty & harga)', 'err');
+  if (!rows.length) return toast('Belum ada bahan yang diisi', 'err');
+  const tgl = $('#bTgl').value;
+  if (!tgl) return toast('Isi tanggal belanja', 'err');
+  const total = rows.reduce((s, r) => s + r.qty * r.harga, 0);
+  const payload = {
+    idKiriman: 'B-' + uid(), storeCode: cfg.kode, pin: cfg.pin, pic: cfg.pic, tanggal: tgl,
+    supplier: $('#bSupplier').value.trim(), catatan: $('#bCatatan').value.trim(), items: rows, foto: fotoData
+  };
+  const info = { tanggal: tgl, ringkas: rows.length + ' bahan · ' + rp(total) + (fotoData ? ' · 📷' : '') };
+  kirim($('#btnKirimB'), 'Belanja', 'submitBelanja', payload, info, () => {
+    if (master) {
+      master.hargaTerakhir = master.hargaTerakhir || {};
+      rows.forEach(r => { master.hargaTerakhir[r.bahan] = { harga: r.harga, satuan: r.satuan }; });
+      save(K.master, master);
+    }
+    itemsEl.innerHTML = ''; addItem();
+    $('#bSupplier').value = ''; $('#bCatatan').value = ''; clearFoto(); updateTotal();
+    window.scrollTo(0, 0);
+  });
+});
+
+$('#oOmzet').addEventListener('input', e => fmtRpInput(e.target));
+$('#oStruk').addEventListener('input', e => { e.target.value = e.target.value.replace(/\D/g, ''); });
+$('#btnKirimO').addEventListener('click', () => {
+  if (!cfg) return openSetup();
+  const omzet = parseRp($('#oOmzet').value), tgl = $('#oTgl').value;
+  if (!tgl) return toast('Isi tanggal', 'err');
+  if (!(omzet > 0)) return toast('Isi omzet dulu', 'err');
+  const struk = $('#oStruk').value;
+  const payload = {
+    idKiriman: 'O-' + uid(), storeCode: cfg.kode, pin: cfg.pin, pic: cfg.pic, tanggal: tgl,
+    omzet: omzet, struk: struk ? Number(struk) : '', catatan: $('#oCatatan').value.trim()
+  };
+  kirim($('#btnKirimO'), 'Omzet', 'submitOmzet', payload, { tanggal: tgl, ringkas: rp(omzet) + (struk ? ' · ' + struk + ' struk' : '') }, () => {
+    $('#oOmzet').value = ''; $('#oStruk').value = ''; $('#oCatatan').value = '';
+  });
+});
+
+/* ============ ANTRIAN OFFLINE ============ */
+function enqueue(item) {
+  const q = load(K.queue, []);
+  item.tries = 0; q.push(item);
+  if (save(K.queue, q)) return true;
+  if (item.payload.foto) {                // memori penuh → coba tanpa foto
+    item.payload.foto = null; item.info.ringkas += ' (foto tidak ikut)';
+    return save(K.queue, q);
+  }
+  return false;
+}
+let flushing = false;
+async function flushQueue(manual) {
+  let q = load(K.queue, []);
+  if (flushing || !q.length) return renderQueue();
+  if (navigator.onLine === false && !manual) return renderQueue();
+  flushing = true;
+  for (const item of q.slice()) {
+    if (cfg && item.payload.storeCode === cfg.kode) item.payload.pin = cfg.pin; // PIN terbaru
+    try {
+      await call(item.fn, item.payload);
+      q = q.filter(x => x.id !== item.id);
+      addHist(Object.assign({}, item.info, { jenis: item.jenis, waktu: Date.now(), status: 'terkirim (antrian)' }));
+    } catch (e) {
+      item.tries = (item.tries || 0) + 1; item.error = errMsg(e);
+    }
+    save(K.queue, q);
+  }
+  flushing = false;
+  renderQueue();
+  if (manual) toast(q.length ? q.length + ' kiriman masih gagal' : 'Antrian terkirim semua ✓', q.length ? 'warn' : 'ok');
+}
+function renderQueue() {
+  const q = load(K.queue, []);
+  $('#qBadge').textContent = q.length;
+  $('#qBadge').classList.toggle('hidden', !q.length);
+  $('#btnFlush').classList.toggle('hidden', !q.length);
+  $('#qList').innerHTML = q.length ? q.map(it =>
+    '<div class="li"><div><div class="t">' + esc(it.jenis) + ' · ' + esc(it.info.tanggal) + '</div>' +
+    '<div class="m">' + esc(it.info.ringkas) + '</div>' +
+    (it.error ? '<div class="e">' + esc(it.error) + (it.tries ? ' (dicoba ' + it.tries + 'x)' : '') + '</div>' : '') +
+    '</div><button class="ghost" data-del="' + esc(it.id) + '">Hapus</button></div>').join('')
+    : '<div class="empty">Tidak ada antrian ✓</div>';
+  $('#qList').querySelectorAll('[data-del]').forEach(b => b.addEventListener('click', () => {
+    save(K.queue, load(K.queue, []).filter(x => x.id !== b.dataset.del)); renderQueue();
+  }));
+}
+$('#btnFlush').addEventListener('click', () => flushQueue(true));
+
+/* ============ RIWAYAT ============ */
+function addHist(h) { const list = load(K.hist, []); list.unshift(h); save(K.hist, list.slice(0, 30)); }
+function renderHist() {
+  const list = load(K.hist, []);
+  $('#hList').innerHTML = list.length ? list.map(h => {
+    const d = new Date(h.waktu);
+    return '<div class="li"><div><div class="t">' + esc(h.jenis) + ' · ' + esc(h.tanggal) + '</div>' +
+      '<div class="m">' + esc(h.ringkas) + ' · dikirim ' + pad(d.getDate()) + '/' + pad(d.getMonth() + 1) + ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes()) + '</div></div>' +
+      '<span class="pill ' + (h.status.indexOf('antrian') > -1 ? 'q' : 'ok') + '">' + esc(h.status) + '</span></div>';
+  }).join('') : '<div class="empty">Belum ada kiriman dari HP ini.</div>';
+}
+
+/* ============ INIT ============ */
+(async function init() {
+  const t = today();
+  ['#bTgl', '#oTgl'].forEach(s => { $(s).value = t; $(s).max = t; });
+  if (!IS_GAS) $('#ribDemo').classList.remove('hidden');
+  renderHeader(); addItem(); updateTotal(); renderQueue(); renderHist();
+  await refreshMaster();
+  if (!cfg) openSetup();
+  flushQueue();
+  window.addEventListener('online', () => flushQueue());
+  setInterval(() => flushQueue(), 60000);
+})();
+</script>
+</body>
+</html>

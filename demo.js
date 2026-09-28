@@ -10,6 +10,8 @@
  *  5. Harga cabe hijau naik ±60% di SEMUA outlet mulai 5 September (harga pasar)
  *  6. UG-01 omzet tidak diinput 6 hari di Agustus
  *  7. UG-01 input dobel samcan 12 September
+ *  8. DW-01 tagihan listrik Agustus melonjak ±80%
+ *  9. AW-01 ada biaya perbaikan besar di Agustus → margin turun
  */
 (function (root) {
   'use strict';
@@ -100,6 +102,47 @@
       });
     }
 
+    // ===== biaya operasional (per bulan) =====
+    // jabatan: [nama jabatan, jumlah orang, gaji+tunjangan+BPJS per orang]
+    const STAF = {
+      'Uri Gukbap': [['Store Manager', 1, 8600000], ['Kepala Dapur', 1, 7500000], ['Cook', 2, 5700000], ['Kitchen Helper', 2, 4800000],
+        ['Kasir', 1, 5100000], ['Waiter/Waitress', 3, 4800000], ['Steward/Dishwasher', 1, 4600000]],
+      'Bakmi': [['Store Manager', 1, 8000000], ['Cook', 2, 5500000], ['Kitchen Helper', 1, 4700000], ['Kasir', 1, 5000000],
+        ['Waiter/Waitress', 2, 4700000], ['Steward/Dishwasher', 1, 4500000]],
+      'Baboy': [['Store Manager', 1, 9000000], ['Kepala Dapur', 1, 8000000], ['Cook', 3, 5800000], ['Kitchen Helper', 2, 4800000],
+        ['Kasir', 1, 5100000], ['Waiter/Waitress', 4, 4800000], ['Steward/Dishwasher', 2, 4600000]]
+    };
+    const SEWA = { 'UG-01': 45000000, 'UG-02': 30000000, 'AW-01': 28000000, 'BB-01': 55000000, 'DW-01': 22000000 };
+    const MALL = { 'UG-01': 3500000, 'BB-01': 4200000 };
+    const biaya = [];
+    const omzetBulan = {};
+    omzet.forEach(r => { const k = r.store + '|' + r.bulan; omzetBulan[k] = (omzetBulan[k] || 0) + r.omzet; });
+    const bulanList = [...new Set(omzet.map(r => r.bulan))].sort();
+    bulanList.forEach(bulan => {
+      stores.forEach(s => {
+        const add = (kelompok, kategori, jumlah) => biaya.push({ bulan, store: s.kode, kelompok, kategori, jumlah: Math.round(jumlah / 1000) * 1000 });
+        const staf = s.brand === 'Uri Gukbap' ? STAF['Uri Gukbap'] : s.brand === 'Baboy' ? STAF.Baboy : STAF.Bakmi;
+        const skala = s.kode === 'UG-02' ? 0.8 : 1;
+        staf.forEach(([jab, n, gaji]) => add('Karyawan', jab, Math.max(1, Math.round(n * skala)) * gaji));
+        add('Tetap', 'Sewa tempat', SEWA[s.kode]);
+        if (MALL[s.kode]) add('Tetap', 'Service charge / IPL', MALL[s.kode]);
+        add('Tetap', 'Internet & telepon', 650000);
+        add('Tetap', 'Langganan POS / software', 450000);
+        // omzet penuh sebulan (perkiraan) — dipakai untuk biaya yang ikut omzet
+        const o = s.omzet * 30.4 * 1.07;
+        let listrik = o * 0.028 * noise(0.08);
+        if (s.kode === 'DW-01' && bulan === BLN_1) listrik *= 1.8;                 // anomali: listrik DW-01 melonjak
+        add('Operasional', 'Listrik', listrik);
+        add('Operasional', 'Air (PDAM)', 1400000 * noise(0.15));
+        add('Operasional', 'Komisi ojol / marketplace', o * 0.045 * noise(0.1));
+        add('Operasional', 'Marketing & promosi', 3000000 * noise(0.12));
+        add('Operasional', 'Kebersihan & pest control', 850000);
+        let perbaikan = rnd() < 0.35 ? 1500000 * noise(0.5) : 0;
+        if (s.kode === 'AW-01' && bulan === BLN_1) perbaikan = 14000000;          // anomali: perbaikan besar AW-01
+        if (perbaikan) add('Operasional', 'Perbaikan & perawatan', perbaikan);
+      });
+    });
+
     return {
       demo: true,
       namaFile: 'DATA DEMO (fiktif)',
@@ -107,7 +150,7 @@
       batasFoodCost: 0.35,
       stores: stores.map(({ kode, brand, nama, aktif }) => ({ kode, brand, nama, aktif })),
       bahan: Object.keys(H).map(n => ({ nama: n, kategori: H[n][0], satuan: H[n][1], brand: 'Semua', acuan: 0 })),
-      belanja, omzet
+      belanja, omzet, biaya
     };
   }
 
