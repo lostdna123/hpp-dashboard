@@ -155,6 +155,7 @@ function doPost(e) {
     if (body.api === 'data') return json_(Object.assign({ ok: true }, dataDashboard_()));
     if (body.api === 'ai') return json_(Object.assign({ ok: true }, analisisAI_(body)));
     if (body.api === 'chat') return json_(Object.assign({ ok: true }, chatAI_(body)));
+    if (body.api === 'komentar') return json_(Object.assign({ ok: true }, komentarAI_(body)));
     throw new Error('API tidak dikenal.');
   } catch (err) {
     return json_({ ok: false, error: String((err && err.message) || err).replace('[VALIDASI] ', '') });
@@ -330,6 +331,66 @@ function chatAI_(body) {
     model: model,
     usage: out.usage || {},
     sisaHariIni: CHAT_MAKS_PER_HARI - n - 1
+  };
+}
+
+/* ============================================================
+ *  KOMENTAR AI di seluruh dashboard (label kartu outlet, KPI, kartu grafik, ringkasan).
+ *  Satu panggilan → JSON berisi komentar untuk semua slot. Dipanggil saat tombol diklik atau mode otomatis di dashboard;
+ *  hasil disimpan di browser selama data & filter tidak berubah.
+ * ============================================================ */
+const KOMENTAR_MAKS_PER_HARI = 60;
+
+function komentarAI_(body) {
+  const apiKey = prop_('ANTHROPIC_API_KEY');
+  if (!apiKey) throw new Error('API key Claude belum di-set. Di Google Sheet: menu 🍜 HPP > Set API key Claude.');
+  const props = PropertiesService.getScriptProperties();
+  const hari = fmt_(new Date(), 'yyyy-MM-dd');
+  const hitung = JSON.parse(props.getProperty('KOMENTAR_HITUNG') || '{}');
+  const n = hitung.hari === hari ? hitung.n : 0;
+  if (n >= KOMENTAR_MAKS_PER_HARI) throw new Error('Batas ' + KOMENTAR_MAKS_PER_HARI + ' komentar AI per hari sudah tercapai. Coba lagi besok.');
+  const model = AI_MODEL_DIIZINKAN.indexOf(body.model) > -1 ? body.model : AI_MODEL_DIIZINKAN[0];
+  const konteks = String(body.konteks || '').slice(0, CHAT_MAKS_KONTEKS);
+  const slot = String(body.slot || '').slice(0, 8000);
+  if (!konteks || !slot) throw new Error('Data untuk komentar kosong.');
+
+  const aturan = [
+    'Kamu analis bisnis senior yang menulis komentar singkat di dashboard owner grup restoran di Indonesia (brand: Uri Gukbap, Bakmi Awei 88, Baboy, Bakmi Dua Wajah).',
+    'Tugas: tulis komentar untuk setiap slot yang diminta, berdasarkan DATA BISNIS. Nilai dengan penilaianmu sendiri sebagai analis (tren, konteks, perbandingan antar outlet & waktu, sebab-akibat), bukan aturan ambang kaku.',
+    'Tiap komentar harus menambah makna, bukan mengulang angka yang sudah tampil: jelaskan "artinya apa", "kenapa kemungkinan terjadi", atau "apa yang perlu dilakukan". Sebut angka pendukung seperlunya (Rp jt, %, poin).',
+    'Singkat & tajam: komentar ≤ 22 kata (ringkasan ≤ 45 kata). Bahasa Indonesia santai-profesional. Jangan basa-basi, jangan mengarang angka. Kalau datanya belum cukup, tulis "Data belum cukup untuk dinilai."',
+    'Bulan berjalan belum selesai: bandingkan secara setara (per hari / tanggal yang sama), jangan total bulan penuh.',
+    'Label outlet: 1–3 kata seperti tag (contoh gaya: "Tumbuh stabil", "Food cost bocor", "Andalan weekend", "Margin tertekan"). nada salah satu: positif | netral | waspada | kritis.',
+    'Jangan mengulang poin yang sama di banyak slot; tiap slot bahas hal yang memang terlihat di kartu itu. Sebut outlet dengan kodenya (mis. UG-01).',
+    'Keluarkan HANYA satu objek JSON valid sesuai format yang diminta, tanpa teks lain dan tanpa ```.'
+  ].join('\n');
+
+  const res = UrlFetchApp.fetch('https://api.anthropic.com/v1/messages', {
+    method: 'post',
+    contentType: 'application/json',
+    headers: { 'x-api-key': apiKey, 'anthropic-version': '2023-06-01' },
+    payload: JSON.stringify({
+      model: model,
+      max_tokens: 5000,
+      system: [
+        { type: 'text', text: aturan },
+        { type: 'text', text: 'DATA BISNIS:\n' + konteks, cache_control: { type: 'ephemeral' } }
+      ],
+      messages: [{ role: 'user', content: slot }]
+    }),
+    muteHttpExceptions: true
+  });
+  const out = JSON.parse(res.getContentText() || '{}');
+  if (res.getResponseCode() !== 200) {
+    throw new Error('Claude API error ' + res.getResponseCode() + ': ' + ((out.error && out.error.message) || res.getContentText().slice(0, 200)));
+  }
+  props.setProperty('KOMENTAR_HITUNG', JSON.stringify({ hari: hari, n: n + 1 }));
+  return {
+    teks: (out.content || []).filter(c => c.type === 'text').map(c => c.text).join('\n'),
+    model: model,
+    usage: out.usage || {},
+    stop: out.stop_reason || '',
+    sisaHariIni: KOMENTAR_MAKS_PER_HARI - n - 1
   };
 }
 

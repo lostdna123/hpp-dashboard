@@ -56,7 +56,14 @@
     </div>
   </section>
 
-  <section class="scope" aria-live="polite"><h2 id="scopeTitle">Memuat…</h2><p class="hint" id="scopeSub"></p></section>
+  <section class="scope"><div class="scope-txt" aria-live="polite"><h2 id="scopeTitle">Memuat…</h2><p class="hint" id="scopeSub"></p></div>
+    <div class="kom-ctl" id="komCtl">
+      <button type="button" class="btn ai-btn" id="btnKomentar"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z"/></svg><span>Komentar AI</span></button>
+      <select id="komModel" aria-label="Model untuk komentar AI"><option value="claude-haiku-4-5-20251001">Haiku 4.5 · hemat</option><option value="claude-sonnet-5">Sonnet 5 · lebih tajam</option></select>
+      <label class="kom-auto" title="Buat komentar otomatis saat filter/periode berubah atau data baru masuk"><input type="checkbox" id="komAuto"> otomatis</label>
+    </div>
+  </section>
+  <div class="ai-banner hidden" id="aiBanner" aria-live="polite"></div>
 
   <section class="kpis" id="kpis" aria-label="Angka utama"></section>
 
@@ -75,25 +82,25 @@
   <main>
     <!-- ===== RINGKASAN ===== -->
     <section id="v-ringkasan" class="view">
-      <div class="card pulse" id="pulse"></div>
+      <div class="card pulse" id="pulse" data-ai="pulse"></div>
       <div class="grid2">
-        <div class="card">
+        <div data-ai="omzetBulan" class="card">
           <div class="card-head"><h2>Omzet per bulan</h2><span class="hint">per outlet, ditumpuk</span></div>
           <div class="chart-box"><canvas id="chOmzetBulan" aria-label="Grafik omzet per bulan per outlet"></canvas></div>
         </div>
-        <div class="card">
+        <div data-ai="rasio" class="card">
           <div class="card-head"><h2>Margin, prime cost &amp; food cost</h2><span class="hint">% dari omzet · prime cost = bahan + karyawan (patokan ≤ 65%)</span></div>
           <div class="chart-box"><canvas id="chRasio" aria-label="Grafik margin, food cost dan biaya karyawan per bulan"></canvas></div>
         </div>
       </div>
 
-      <div class="card">
+      <div data-ai="performa" class="card">
         <div class="card-head"><h2>Performa outlet</h2><span class="hint">periode sesuai filter · klik baris untuk detail outlet</span></div>
         <div class="table-wrap"><table id="tbPerforma"></table></div>
       </div>
 
       <div class="grid2">
-        <div class="card">
+        <div data-ai="brand" class="card">
           <div class="card-head"><h2>Per brand</h2></div>
           <div class="table-wrap"><table id="tbBrand"></table></div>
         </div>
@@ -121,7 +128,7 @@
         <div id="aiOut" class="ai-out hidden"></div>
       </div>
 
-      <div class="card">
+      <div data-ai="tren" class="card">
         <div class="card-head"><h2>Tren bulanan</h2><span class="hint">outlet sesuai filter</span></div>
         <div class="table-wrap"><table id="tbTren"></table></div>
       </div>
@@ -135,26 +142,26 @@
 
     <!-- ===== PENJUALAN ===== -->
     <section id="v-penjualan" class="view hidden">
-      <div class="card">
+      <div data-ai="harian" class="card">
         <div class="card-head"><h2>Omzet harian</h2><span class="hint" id="harianNote"></span></div>
         <div class="chart-box"><canvas id="chHarian" aria-label="Grafik omzet harian"></canvas></div>
       </div>
       <div class="grid2">
-        <div class="card">
+        <div data-ai="hariMinggu" class="card">
           <div class="card-head"><h2>Rata-rata omzet per hari</h2><span class="hint">semua outlet dipilih, per hari dalam minggu</span></div>
           <div class="chart-box short"><canvas id="chHariMinggu" aria-label="Grafik rata-rata omzet per hari dalam minggu"></canvas></div>
         </div>
-        <div class="card">
+        <div data-ai="ticket" class="card">
           <div class="card-head"><h2>Rata-rata per struk</h2><span class="hint">omzet ÷ jumlah struk, per bulan</span></div>
           <div class="chart-box short"><canvas id="chTicket" aria-label="Grafik rata-rata nilai per struk per bulan"></canvas></div>
         </div>
       </div>
-      <div class="card">
+      <div data-ai="heatmap" class="card">
         <div class="card-head"><h2>Pola ramai per hari</h2><span class="hint">indeks omzet rata-rata tiap hari vs rata-rata harian outlet itu (100 = rata-rata) · bantu atur jadwal shift &amp; stok</span></div>
         <div class="table-wrap"><table id="tbHeat" class="heatmap"></table></div>
         <div class="heat-legend" aria-hidden="true"><span>lebih sepi</span><i></i><span>lebih ramai</span></div>
       </div>
-      <div class="card">
+      <div data-ai="penjualan" class="card">
         <div class="card-head"><h2>Penjualan per outlet</h2><span class="hint">periode sesuai filter</span></div>
         <div class="table-wrap"><table id="tbPenjualan"></table></div>
       </div>
@@ -173,15 +180,15 @@
         </ul>
         <p class="hint">Sementara itu, tabel di bawah menampilkan laba kotor (omzet − bahan).</p>
       </div>
-      <div class="card">
+      <div data-ai="profit" class="card">
         <div class="card-head"><h2>Margin operasional per outlet per bulan</h2><span class="hint" id="profitNote"></span></div>
         <div class="chart-box"><canvas id="chProfit" aria-label="Grafik margin operasional per outlet per bulan"></canvas></div>
       </div>
-      <div class="card">
+      <div data-ai="labaRugi" class="card">
         <div class="card-head"><h2>Laba rugi per outlet</h2><span class="hint">periode sesuai filter · klik baris untuk rincian biaya</span></div>
         <div class="table-wrap"><table id="tbProfit"></table></div>
       </div>
-      <div class="card" id="impasKartu">
+      <div data-ai="impas" class="card" id="impasKartu">
         <div class="card-head"><h2>Titik impas per outlet</h2><span class="hint">omzet minimal per hari supaya tidak rugi, dari biaya periode filter · klik baris untuk detail outlet</span></div>
         <div class="grid2 inner impas">
           <div class="chart-box short"><canvas id="chImpas" aria-label="Grafik omzet rata-rata per hari dibanding titik impas per outlet"></canvas></div>
@@ -189,7 +196,7 @@
         </div>
         <p class="hint">Biaya tetap = gaji + sewa &amp; biaya tetap + tagihan (tanpa komisi ojol). Biaya variabel = bahan + pembelian lain + komisi ojol, ikut naik-turun dengan omzet. Jarak aman &lt; 20% = rawan rugi kalau omzet turun.</p>
       </div>
-      <div class="card">
+      <div data-ai="pos" class="card">
         <div class="card-head"><h2>Biaya per pos</h2><span class="hint">outlet sesuai filter, % dari omzet</span></div>
         <div class="table-wrap"><table id="tbPos"></table></div>
       </div>
@@ -201,20 +208,20 @@
         <h2>Saldo awal kas belum diisi</h2>
         <p class="hint">Jalankan menu <b>🍜 HPP › Setup</b> di Google Sheet, lalu klik Refresh. Saldo awal per outlet diatur di sheet <b>REKAP_CASHFLOW</b> sel D1 (default Rp100.000.000).</p>
       </div>
-      <div class="card">
+      <div data-ai="arus" class="card">
         <div class="card-head"><h2>Kas masuk vs kas keluar per bulan</h2><span class="hint" id="arusNote"></span></div>
         <div class="chart-box"><canvas id="chArus" aria-label="Grafik kas masuk, kas keluar dan arus kas bersih per bulan"></canvas></div>
       </div>
-      <div class="card">
+      <div data-ai="laporanArus" class="card">
         <div class="card-head"><h2>Laporan arus kas</h2><span class="hint">per bulan · cabang sesuai filter (pilih outlet di atas untuk laporan 1 cabang)</span></div>
         <div class="table-wrap"><table id="tbArus" class="arus"></table></div>
       </div>
-      <div class="card">
+      <div data-ai="kasCabang" class="card">
         <div class="card-head"><h2>Cashflow per cabang</h2><span class="hint">periode sesuai filter · klik baris untuk detail outlet</span></div>
         <div class="table-wrap"><table id="tbKas"></table></div>
         <p class="hint kas-note" id="kasBerjalan"></p>
       </div>
-      <div class="card">
+      <div data-ai="saldoHarian" class="card">
         <div class="card-head"><h2>Saldo kas harian per cabang</h2><span class="hint">dimulai dari saldo awal (atur di sheet REKAP_CASHFLOW sel D1) · turun tajam di akhir bulan = gaji, sewa &amp; tagihan dibayar</span></div>
         <div class="chart-box"><canvas id="chKas" aria-label="Grafik saldo kas harian per cabang"></canvas></div>
       </div>
@@ -223,16 +230,16 @@
     <!-- ===== BELANJA & BAHAN ===== -->
     <section id="v-bahan" class="view hidden">
       <div class="grid2">
-        <div class="card">
+        <div data-ai="kategori" class="card">
           <div class="card-head"><h2>Belanja per kategori</h2><span class="hint">% dari omzet</span></div>
           <div class="chart-box short"><canvas id="chKategori" aria-label="Grafik belanja per kategori sebagai persen omzet"></canvas></div>
         </div>
-        <div class="card">
+        <div data-ai="fc" class="card">
           <div class="card-head"><h2>Food cost per outlet per bulan</h2><span class="hint" id="fcNote"></span></div>
           <div class="chart-box short"><canvas id="chFc" aria-label="Grafik food cost per outlet per bulan"></canvas></div>
         </div>
       </div>
-      <div class="card">
+      <div data-ai="bahan" class="card">
         <div class="card-head">
           <h2>Bahan baku</h2>
           <input id="qItem" type="search" placeholder="Cari bahan…" aria-label="Cari bahan">
@@ -240,7 +247,7 @@
         <p class="hint">Harga rata-rata dibanding periode sebelumnya dengan panjang yang sama. Klik baris untuk grafik harga per outlet.</p>
         <div class="table-wrap"><table id="tbItem"></table></div>
       </div>
-      <div class="card">
+      <div data-ai="pembelian" class="card">
         <div class="card-head"><h2>Pembelian non-bahan</h2><span class="hint">peralatan, kebersihan, ATK, dll · tidak masuk food cost, tapi mengurangi laba</span></div>
         <div class="grid2 inner">
           <div class="table-wrap"><table id="tbBeliKat"></table></div>
@@ -265,13 +272,14 @@
     <!-- ===== ANOMALI ===== -->
     <section id="v-anomali" class="view hidden">
       <p class="hint">Deteksi otomatis (statistik) terhadap harga bahan, pemakaian, food cost, biaya & margin. Butuh histori ±3 bulan untuk perbandingan yang adil. Minta AI menjelaskan di tab <a href="#" data-goto="ringkasan">Ringkasan</a>.</p>
+      <div class="ai-note-wrap" data-ai="anomali"></div>
       <div class="chips" id="chips" role="group" aria-label="Filter jenis anomali"></div>
       <div id="anList" class="an-list"></div>
     </section>
   </main>
 
   <footer class="foot">
-    Data dari Google Sheet lewat Apps Script · Deteksi anomali dihitung di browser · AI hanya jalan saat diminta
+    Data dari Google Sheet lewat Apps Script · Deteksi anomali dihitung di browser · AI jalan saat diminta atau saat komentar otomatis aktif (bisa dimatikan)
   </footer>
 </div>
 

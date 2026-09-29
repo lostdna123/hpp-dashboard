@@ -494,6 +494,7 @@
     $$('.tabs button').forEach(x => x.classList.toggle('on', x.dataset.tab === st.tab));
     TABS.forEach(t => $('#v-' + t).classList.toggle('hidden', t !== st.tab));
     ({ ringkasan: renderRingkasan, outlet: renderOutlet, penjualan: renderPenjualan, profit: renderProfit, kas: renderKas, bahan: renderBahan, anomali: renderAnomali })[st.tab]();
+    pasangKomentar();
   }
 
   /* ================= RINGKASAN ================= */
@@ -1603,6 +1604,223 @@
   $('#chatInput').addEventListener('input', ukurInput);
   $('#chatInput').addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); kirimChat($('#chatInput').value); } });
   $('#chatPanel').addEventListener('keydown', e => { if (e.key === 'Escape') tutupChat(); });
+
+  /* ================= Komentar AI di seluruh dashboard =================
+     Satu panggilan → Claude menulis semua komentar sekaligus (JSON): ringkasan, tiap KPI, label + komentar tiap outlet,
+     dan catatan di tiap kartu grafik/tabel. Penilaian dari AI, bukan aturan ambang. Hasil disimpan per filter + data,
+     jadi tidak memanggil ulang selama tidak ada yang berubah. */
+  const K_KOM = 'hppdash.komentar', K_KOM_SET = 'hppdash.komSet';
+  const KPI_KEYS = ['omzet', 'laba', 'foodcost', 'prime', 'cashflow', 'anomali'];
+  const KPI_DESK = { omzet: 'omzet periode vs periode sebelumnya', laba: 'laba operasional & margin', foodcost: 'food cost (belanja bahan ÷ omzet)', prime: 'prime cost (bahan + karyawan ÷ omzet)', cashflow: 'arus kas bersih periode & saldo kas', anomali: 'jumlah anomali terdeteksi' };
+  const KARTU_DESK = {
+    pulse: 'Panel "Kemarin & bulan ini": omzet kemarin vs hari sama minggu lalu, bulan berjalan vs setara bulan lalu, proyeksi akhir bulan, target, status input tiap outlet',
+    omzetBulan: 'Grafik omzet per bulan (bertumpuk per outlet)',
+    rasio: 'Grafik margin, prime cost, food cost & biaya karyawan (% omzet) per bulan',
+    performa: 'Tabel performa outlet periode ini (omzet, target, food cost, prime cost, laba, margin, anomali)',
+    brand: 'Tabel per brand (omzet, porsi, food cost, margin)',
+    tren: 'Tabel tren bulanan (omzet, belanja, karyawan, biaya lain, laba, struk)',
+    harian: 'Grafik omzet harian total + rata-rata 7 hari',
+    hariMinggu: 'Grafik rata-rata omzet per hari dalam minggu',
+    ticket: 'Grafik rata-rata nilai per struk per bulan',
+    heatmap: 'Heatmap indeks ramai per hari dalam minggu per outlet (100 = rata-rata outlet itu)',
+    penjualan: 'Tabel penjualan per outlet (omzet, struk, per struk, omzet/hari)',
+    profit: 'Grafik margin operasional per outlet per bulan',
+    labaRugi: 'Tabel laba rugi per outlet',
+    impas: 'Titik impas: omzet minimal per hari vs omzet aktual per hari per outlet',
+    pos: 'Tabel biaya per pos (% omzet)',
+    arus: 'Grafik kas masuk vs kas keluar per bulan',
+    laporanArus: 'Laporan arus kas bulanan (saldo awal, masuk, keluar per jenis, saldo akhir, belum dibayar)',
+    kasCabang: 'Tabel cashflow per cabang (saldo akhir, arus bersih)',
+    saldoHarian: 'Grafik saldo kas harian per cabang',
+    kategori: 'Belanja bahan per kategori (% omzet)',
+    fc: 'Grafik food cost per outlet per bulan',
+    bahan: 'Tabel bahan baku (belanja terbesar, perubahan harga)',
+    pembelian: 'Pembelian non-bahan per kategori & sumber uang',
+    anomali: 'Daftar anomali terdeteksi otomatis (harga, pemakaian, food cost, biaya, margin)'
+  };
+  const NADA = ['positif', 'netral', 'waspada', 'kritis'];
+  st.kom = { set: Object.assign({ model: 'claude-haiku-4-5-20251001', auto: true }, load(K_KOM_SET, {})), sibuk: false, err: null, gagal: {}, t: null };
+  if (!NAMA_MODEL[st.kom.set.model] || st.kom.set.model === 'claude-opus-5-5') st.kom.set.model = 'claude-haiku-4-5-20251001';
+  $('#komModel').value = st.kom.set.model; $('#komAuto').checked = !!st.kom.set.auto;
+  $('#komModel').addEventListener('change', () => { st.kom.set.model = $('#komModel').value; save(K_KOM_SET, st.kom.set); });
+  $('#komAuto').addEventListener('change', () => { st.kom.set.auto = $('#komAuto').checked; save(K_KOM_SET, st.kom.set); pasangKomentar(); });
+
+  const outletKomentar = () => { const b = st.scope.brand; return st.data.stores.filter(s => !b || s.brand === b); }; // sama dengan kartu di tab Outlet
+  const kunciScope = () => [st.scope.dari, st.scope.sampai, st.scope.brand || '', st.scope.store || ''].join('|');
+
+  /** angka yang sedang tampil di layar (sesuai filter), supaya komentar nyambung dengan yang dilihat owner */
+  function angkaTampil() {
+    const sc = st.scope, D = st.data, j = n => n == null || !isFinite(n) ? '-' : (n / 1e6).toFixed(1), p1 = x => x == null || !isFinite(x) ? '-' : (x * 100).toFixed(1) + '%';
+    const sg = r => r == null ? 'n/a' : (r >= 0 ? '+' : '') + (r * 100).toFixed(0) + '%';
+    const L = ['## ANGKA YANG SEDANG TAMPIL DI DASHBOARD (filter periode ' + sc.dari + ' s/d ' + sc.sampai + ', ' + (sc.store ? 'outlet ' + sc.store : sc.brand ? 'brand ' + sc.brand : 'semua outlet') +
+      '; pembanding ' + sc.prevDari + ' s/d ' + sc.prevSampai + (sc.cap ? ', bulan pembanding dipotong s/d tgl ' + Number(sc.cap.slice(8, 10)) + ' supaya setara' : '') + '; uang dalam jt)'];
+    const a = agScope(sc, sc.dari, sc.sampai), aP = agScope(sc, sc.prevDari, sc.prevSampai, sc.cap);
+    const pl = plScope(sc, sc.dari, sc.sampai), plP = plScope(sc, sc.prevDari, sc.prevSampai, sc.cap);
+    const lv = l => st.anomali.filter(x => x.level === l).length;
+    L.push('KPI omzet: ' + j(a.omz) + ' (' + sg(chg(a.omz, aP.omz)) + ' vs pembanding ' + j(aP.omz) + ')');
+    L.push('KPI laba operasional: ' + (pl.adaBiaya ? j(pl.laba) + ', margin ' + p1(pl.margin) + ' (pembanding ' + (plP.adaBiaya ? p1(plP.margin) : '-') + ')' : 'biaya belum diisi'));
+    L.push('KPI food cost: ' + p1(a.fc) + ' (pembanding ' + p1(aP.fc) + ', batas umum ' + p1(D.batasFoodCost || 0.35) + ')');
+    L.push('KPI prime cost: ' + p1(pl.prime) + ' (bahan ' + p1(pl.fc) + ' + karyawan ' + p1(pl.karyPct) + '; pembanding ' + p1(plP.prime) + ')');
+    if (adaKas()) {
+      const net = b => { const r = arusBulan(sc.storeList, b); return r.bersih - r.tertunda; };
+      L.push('KPI cashflow: arus bersih periode ' + j(sum(sc.bulan.filter(b => b + '-01' <= today()).map(net))) + ' (sudah dikurangi gaji/sewa/tagihan bulan berjalan yang belum dibayar), saldo kas ' + j(saldoScope(sc, batasHariIni(akhirBulan(sc.sampai)))) +
+        '; arus bersih per bulan: ' + bulanGrafik(sc).filter(b => b + '-01' <= today()).map(b => b + ' ' + j(net(b))).join(', '));
+    } else L.push('KPI cashflow: saldo awal kas belum diisi');
+    L.push('KPI anomali: ' + st.anomali.length + ' (tinggi ' + lv('tinggi') + ', sedang ' + lv('sedang') + ', rendah ' + lv('rendah') + ')');
+
+    L.push('', 'Outlet (periode filter): kode | omzet | vs_pembanding | capaian_target | food_cost (batas) | prime | margin (target) | anomali_tinggi/total | label_aturan_otomatis');
+    outletKomentar().forEach(s => {
+      const p = plOutlet(s.kode, sc.dari, sc.sampai), pp = plOutlet(s.kode, sc.prevDari, sc.prevSampai, sc.cap), cap = capaianTarget(sc, [s.kode]);
+      const an = Anomali.deteksi(D, { bulanDari: sc.dari, bulanSampai: sc.sampai, storeSet: new Set([s.kode]), hariIni: today() }), nt = an.filter(x => x.level === 'tinggi').length;
+      L.push([s.kode, j(p.omz), sg(chg(p.omz, pp.omz)), cap ? p1(cap.capaian) : '-', p1(p.fc) + ' (' + p1(batasFc(s.kode)) + ')', p1(p.prime), (p.adaBiaya ? p1(p.margin) : '-') + ' (' + p1(targetMargin(s.kode)) + ')', nt + '/' + an.length, statusOutlet(p, nt, s.kode).label].join(' | '));
+    });
+
+    const kodes = D.stores.filter(s => inStore(sc, s.kode)).map(s => s.kode), set = new Set(kodes);
+    const kemarin = hariSebelum(today()), mg = geserHari(kemarin, -7);
+    const om = t => sum(D.omzet.filter(r => set.has(r.store) && r.tgl === t).map(r => r.omzet));
+    const bb = bulanBerjalan(kodes), ks = kodes.filter(k => (targetOf(k) || {}).omzet);
+    L.push('', 'Panel kemarin & bulan ini: kemarin (' + kemarin + ') ' + j(om(kemarin)) + ' vs ' + mg + ' ' + j(om(mg)) + '; bulan berjalan 1–' + bb.dEl + ' ' + j(bb.mtd) + ' vs setara bulan lalu ' + j(bb.prev) + ' (' + sg(chg(bb.mtd, bb.prev)) + '), proyeksi akhir bulan ' + j(bb.proyeksi) +
+      (ks.length ? ', target bulan ini ' + j(sum(ks.map(k => targetOf(k).omzet))) + ' (' + ks.length + ' outlet bertarget)' : ', target belum diisi') +
+      '; outlet belum input omzet kemarin: ' + (kodes.filter(k => !D.omzet.some(r => r.store === k && r.tgl === kemarin)).join(', ') || 'tidak ada'));
+    const kat = [...groupBy(a.B, r => r.kategori).entries()].map(([k, rs]) => [k, sum(rs.map(r => r.total))]).sort((x, y) => y[1] - x[1]);
+    L.push('Belanja bahan per kategori (periode filter, % omzet): ' + kat.map(([k, t]) => k + ' ' + p1(a.omz ? t / a.omz : null)).join(', '));
+    const P = (D.pembelian || []).filter(r => set.has(r.store) && r.bulan >= sc.dari && r.bulan <= sc.sampai);
+    L.push('Pembelian non-bahan (periode filter): total ' + j(sum(P.map(r => r.total))) + '; ' + [...groupBy(P, r => r.kategori).entries()].map(([k, rs]) => k + ' ' + j(sum(rs.map(r => r.total)))).join(', '));
+    return L.join('\n');
+  }
+
+  function konteksKomentar() {
+    const k = kunciScope() + '|' + today();
+    if (st.kom.memo && st.kom.memo.data === st.data && st.kom.memo.k === k) return st.kom.memo.teks;
+    const teks = angkaTampil() + '\n\n## DATA LENGKAP 6 BULAN\n' + konteksChat();
+    st.kom.memo = { data: st.data, k, teks };
+    return teks;
+  }
+
+  function slotKomentar() {
+    const o = outletKomentar().map(s => s.kode), sc = st.scope;
+    const contoh = { ringkasan: '…', kpi: Object.fromEntries(KPI_KEYS.map(k => [k, '…'])), outlet: Object.fromEntries(o.slice(0, 2).map(k => [k, { label: '…', nada: 'netral', komentar: '…' }])), kartu: { pulse: '…', omzetBulan: '…' } };
+    return ['Tulis komentar dashboard untuk filter yang sedang dilihat owner (periode ' + sc.dari + ' s/d ' + sc.sampai + ', ' + (sc.store ? 'outlet ' + sc.store : sc.brand ? 'brand ' + sc.brand : 'semua outlet') + ').',
+      'Balas dengan SATU objek JSON dengan kunci persis seperti ini (contoh bentuk):', JSON.stringify(contoh), '',
+      '"ringkasan": 1–2 kalimat (≤ 45 kata) kondisi bisnis periode ini + satu prioritas paling penting. Tampil di atas semua tab.',
+      '"kpi": komentar ≤ 14 kata di bawah tiap angka KPI, isi semua kunci: ' + KPI_KEYS.map(k => k + ' = ' + KPI_DESK[k]).join('; ') + '.',
+      '"outlet": isi untuk SEMUA outlet ini: ' + o.join(', ') + '. Tiap outlet: label 1–3 kata (tag karakter/kondisi outlet), nada (positif|netral|waspada|kritis), komentar ≤ 22 kata (kenapa & apa yang perlu dilakukan). Label boleh berbeda dari label_aturan_otomatis kalau menurutmu ada hal lebih penting.',
+      '"kartu": catatan ≤ 22 kata yang tampil di atas tiap kartu. Isi semua kunci berikut (apa yang menarik dari grafik/tabel itu):',
+      ...Object.entries(KARTU_DESK).map(([k, v]) => '- ' + k + ': ' + v),
+      '', 'Semua angka harus dari DATA BISNIS. Output hanya JSON.'].join('\n');
+  }
+
+  function parseKomentar(teks) {
+    const a = String(teks || '').indexOf('{'), b = String(teks || '').lastIndexOf('}');
+    if (a < 0 || b <= a) throw new Error('Jawaban AI bukan JSON.');
+    const o = JSON.parse(teks.slice(a, b + 1));
+    const str = (x, n) => typeof x === 'string' ? x.trim().slice(0, n || 320) : '';
+    const out = { ringkasan: str(o.ringkasan, 500), kpi: {}, outlet: {}, kartu: {} };
+    KPI_KEYS.forEach(k => { const v = str((o.kpi || {})[k]); if (v) out.kpi[k] = v; });
+    Object.keys(KARTU_DESK).forEach(k => { const v = str((o.kartu || {})[k]); if (v) out.kartu[k] = v; });
+    Object.entries(o.outlet || {}).forEach(([k, v]) => { if (v && typeof v === 'object') out.outlet[k] = { label: str(v.label, 40), nada: NADA.includes(v.nada) ? v.nada : 'netral', komentar: str(v.komentar) }; });
+    if (!out.ringkasan && !Object.keys(out.outlet).length && !Object.keys(out.kartu).length) throw new Error('Jawaban AI kosong.');
+    return out;
+  }
+
+  /** hasil tersimpan untuk filter ini: persis (data sama) → segar; filter sama tapi data berubah → basi (tetap ditampilkan, redup) */
+  function komentarAktif() {
+    if (!st.data || st.data.demo || !st.scope) return null;
+    const list = load(K_KOM, []), dh = hash(konteksKomentar()), sk = kunciScope();
+    const persis = list.find(x => x.dh === dh);
+    if (persis) return { h: persis, basi: false, dh };
+    const lama = list.filter(x => x.sk === sk).sort((x, y) => y.waktu - x.waktu)[0];
+    return lama ? { h: lama, basi: true, dh } : { h: null, basi: false, dh };
+  }
+
+  async function buatKomentar() {
+    if (st.kom.sibuk || !st.data || st.data.demo) return;
+    const konteks = konteksKomentar(), dh = hash(konteks), sk = kunciScope(), model = st.kom.set.model;
+    st.kom.sibuk = true; st.kom.err = null; pasangKomentar();
+    try {
+      const r = await api({ api: 'komentar', model, konteks, slot: slotKomentar() }, 4); // tanpa coba-ulang: jangan tertagih dua kali
+      const isi = parseKomentar(r.teks);
+      const u = r.usage || {}, h = HARGA[r.model] || [1, 5];
+      const usd = ((u.input_tokens || 0) * h[0] + (u.cache_creation_input_tokens || 0) * h[0] * 1.25 + (u.cache_read_input_tokens || 0) * h[0] * 0.1 + (u.output_tokens || 0) * h[1]) / 1e6;
+      const list = load(K_KOM, []).filter(x => x.dh !== dh);
+      list.push({ dh, sk, waktu: Date.now(), model: r.model, usd, sisa: r.sisaHariIni, isi });
+      save(K_KOM, list.slice(-12));
+      delete st.kom.gagal[dh];
+    } catch (e) { st.kom.err = { dh, pesan: e.message }; st.kom.gagal[dh] = true; }
+    st.kom.sibuk = false;
+    pasangKomentar();
+  }
+  $('#btnKomentar').addEventListener('click', () => { st.kom.gagal = {}; buatKomentar(); });
+
+  const ikonAI = '<svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z"/></svg>';
+  const waktuPendek = t => { const d = new Date(t), hr = new Date(); return (d.toDateString() === hr.toDateString() ? 'hari ini ' : pad(d.getDate()) + '/' + pad(d.getMonth() + 1) + ' ') + pad(d.getHours()) + ':' + pad(d.getMinutes()); };
+  function noteHtml(teks, cls) { return '<div class="ai-note' + (cls ? ' ' + cls : '') + '"><span class="ai-ic">' + ikonAI + '</span><p>' + esc(teks) + '</p></div>'; }
+  function taruhSetelahHead(el, html) {
+    el.querySelectorAll(':scope > .ai-note').forEach(n => n.remove());
+    if (!html) return;
+    const head = el.querySelector(':scope > .card-head, :scope > .detail-head');
+    if (head) head.insertAdjacentHTML('afterend', html); else el.insertAdjacentHTML('afterbegin', html);
+  }
+
+  /** pasang semua komentar ke elemen yang sedang tampil; dipanggil setiap selesai render */
+  function pasangKomentar() {
+    if (!st.data || !st.scope) return;
+    const demo = !!st.data.demo, ak = komentarAktif(), h = ak && ak.h, isi = h ? h.isi : null, basi = ak && ak.basi ? ' basi' : '';
+    const btn = $('#btnKomentar');
+    btn.disabled = demo || st.kom.sibuk;
+    btn.title = demo ? 'Komentar AI butuh koneksi ke Google Sheet (Pengaturan)' : 'Claude menilai angka yang tampil lalu menulis komentar di tiap bagian dashboard';
+    btn.querySelector('span').textContent = st.kom.sibuk ? 'AI menulis…' : isi ? (ak.basi ? 'Perbarui komentar' : 'Tulis ulang') : 'Komentar AI';
+    btn.classList.toggle('sibuk', st.kom.sibuk);
+    $('#komCtl').classList.toggle('hidden', demo);
+
+    // banner ringkasan
+    const ban = $('#aiBanner');
+    if (st.kom.sibuk) {
+      ban.className = 'ai-banner loading';
+      ban.innerHTML = '<span class="ai-ic">' + ikonAI + '</span><div><p>Claude sedang membaca angka di dashboard dan menulis komentar untuk tiap bagian…</p><div class="ai-shimmer"><i></i><i></i></div></div>';
+    } else if (st.kom.err && ak && st.kom.err.dh === ak.dh) {
+      ban.className = 'ai-banner err';
+      ban.innerHTML = '<span class="ai-ic">!</span><div><p>Komentar AI gagal: ' + esc(st.kom.err.pesan) + '</p></div><button type="button" class="btn outline small" id="komUlang">Coba lagi</button>';
+      $('#komUlang').addEventListener('click', () => { st.kom.gagal = {}; buatKomentar(); });
+    } else if (isi && isi.ringkasan) {
+      ban.className = 'ai-banner' + basi;
+      ban.innerHTML = '<span class="ai-ic">' + ikonAI + '</span><div><p>' + esc(isi.ringkasan) + '</p><div class="ai-meta">' +
+        (ak.basi ? '<b>Data sudah berubah sejak komentar ini dibuat.</b> ' : '') + 'Komentar AI · ' + waktuPendek(h.waktu) + ' · ' + esc(NAMA_MODEL[h.model] || h.model) + ' · ±$' + (h.usd || 0).toFixed(3) +
+        (h.sisa != null ? ' · sisa ' + h.sisa + '× hari ini' : '') + ' · penilaian AI, cek lagi sebelum ambil keputusan besar</div></div>';
+    } else { ban.className = 'ai-banner hidden'; ban.innerHTML = ''; }
+
+    // KPI
+    $$('#kpis .kpi').forEach((el, i) => {
+      el.querySelectorAll('.ai-slot').forEach(n => n.remove());
+      const t = isi && isi.kpi[KPI_KEYS[i]];
+      if (t) (el.querySelector('.d') || el.querySelector('.v')).insertAdjacentHTML('afterend', '<div class="ai-slot' + basi + '"><span class="ai-ic">' + ikonAI + '</span>' + esc(t) + '</div>');
+    });
+
+    // kartu outlet
+    $$('#outletGrid .ocard[data-s]').forEach(el => {
+      el.querySelectorAll('.ai-o').forEach(n => n.remove());
+      const o = isi && isi.outlet[el.dataset.s];
+      if (o && (o.label || o.komentar)) el.querySelector('.oh').insertAdjacentHTML('afterend', '<div class="ai-o' + basi + '">' +
+        (o.label ? '<span class="ai-flag ' + o.nada + '" title="Label dari AI">' + ikonAI + esc(o.label) + '</span>' : '') + (o.komentar ? '<p>' + esc(o.komentar) + '</p>' : '') + '</div>');
+    });
+    $$('#tbPerforma tr[data-s]').forEach(tr => {
+      const td = tr.cells[1]; if (!td) return;
+      td.querySelectorAll('.ai-flag').forEach(n => n.remove());
+      const o = isi && isi.outlet[tr.dataset.s];
+      if (o && o.label) td.insertAdjacentHTML('beforeend', '<span class="ai-flag ' + o.nada + basi + '" title="' + esc(o.komentar || 'Label dari AI') + '">' + ikonAI + esc(o.label) + '</span>');
+    });
+    const det = $('#outletDetail');
+    if (det) { const o = isi && st.scope.store && isi.outlet[st.scope.store]; taruhSetelahHead(det, o && o.komentar ? noteHtml((o.label ? o.label + ' — ' : '') + o.komentar, (o.nada || '') + basi) : ''); }
+
+    // kartu grafik/tabel
+    $$('[data-ai]').forEach(el => { const t = isi && isi.kartu[el.dataset.ai]; taruhSetelahHead(el, t ? noteHtml(t, basi.trim()) : ''); });
+
+    // otomatis: kalau belum ada komentar untuk filter ini (atau sudah basi > 3 jam)
+    clearTimeout(st.kom.t);
+    if (!demo && st.kom.set.auto && !st.kom.sibuk && ak && !st.kom.gagal[ak.dh] && (!h || (ak.basi && Date.now() - h.waktu > 3 * 3600 * 1000))) {
+      st.kom.t = setTimeout(() => { const a2 = komentarAktif(); if (a2 && a2.dh === ak.dh) buatKomentar(); }, 2500); // tunggu filter selesai diubah
+    }
+  }
 
   /* ================= init ================= */
   muat();

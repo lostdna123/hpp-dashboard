@@ -76,6 +76,17 @@ Apps Script ke Claude. Ringkasan ditandai *prompt cache*, jadi pertanyaan lanjut
 (±$0,01 pertanyaan pertama dengan Haiku, ±$0,002 lanjutan). Maks. 150 pertanyaan/hari (`CHAT_MAKS_PER_HARI`).
 Nama karyawan & gaji per orang tidak pernah dikirim. Riwayat chat hanya disimpan di browser.
 
+## Komentar AI di seluruh dashboard
+
+Tombol **✨ Komentar AI** (di bawah judul periode) meminta Claude menilai angka yang sedang tampil dan menulis:
+ringkasan di atas semua tab, satu baris di tiap KPI, **label + komentar di tiap kartu outlet** (di samping label Sehat/Perlu perhatian —
+label AI berdasarkan penilaian, bukan aturan "kalau di bawah X%"), dan catatan di atas tiap grafik/tabel.
+
+- Satu panggilan untuk semua komentar (±25 rb token masuk, ±2 rb keluar → Haiku ±$0,03, Sonnet ±$0,08).
+- Hasil disimpan per filter + data. Selama tidak berubah, tidak memanggil lagi. Kalau data baru masuk, komentar lama tetap tampil redup sampai diperbarui.
+- **otomatis** (default nyala): komentar dibuat sendiri saat filter berganti/belum ada komentar; komentar basi diperbarui kalau sudah > 3 jam. Matikan kalau mau hemat.
+- Batas 60 panggilan per hari (Script Properties `KOMENTAR_HITUNG`).
+
 ## Cashflow per cabang
 
 Tiap outlet mulai dengan saldo kas **Rp100.000.000** (ubah di sheet **REKAP_CASHFLOW** sel **D1**), dihitung sejak awal
