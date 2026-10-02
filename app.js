@@ -1319,7 +1319,7 @@
 
   /* ================= Analisis AI (hanya saat tombol diklik) ================= */
   const MAKS_ANOMALI_AI = 15;
-  const HARGA = { 'claude-haiku-4-5-20251001': [1, 5], 'claude-sonnet-5': [2, 10], 'claude-opus-5-5': [4, 20] }; // USD per 1 juta token (input, output)
+  const HARGA = { 'claude-haiku-4-5-20251001': [1, 5, 0.1], 'claude-sonnet-5': [2, 10, 0.1], 'claude-sonnet-5-5': [2, 10, 0.1], 'claude-opus-5-5': [4, 20, 0.05] }; // USD per 1 juta token (input, output, faktor harga baca cache)
 
   function ringkasanAI() {
     const sc = st.scope, D = st.data, a = agScope(sc, sc.dari, sc.sampai), aP = agScope(sc, sc.prevDari, sc.prevSampai, sc.cap);
@@ -1536,7 +1536,7 @@
     'Hari apa paling ramai? Outlet mana yang perlu tambah staf di weekend?',
     'Kalau omzet BB-01 turun 20%, masih untung nggak?'
   ];
-  const NAMA_MODEL = { 'claude-haiku-4-5-20251001': 'Haiku 4.5', 'claude-sonnet-5': 'Sonnet 5', 'claude-opus-5-5': 'Opus 5.5' };
+  const NAMA_MODEL = { 'claude-haiku-4-5-20251001': 'Haiku 4.5', 'claude-sonnet-5': 'Sonnet 5', 'claude-sonnet-5-5': 'Sonnet 5.5', 'claude-opus-5-5': 'Opus 5.5' };
   { const m = load(K_CHAT_MODEL, ''); if (m && NAMA_MODEL[m]) $('#chatModel').value = m; }
   $('#chatModel').addEventListener('change', () => { save(K_CHAT_MODEL, $('#chatModel').value); infoChat(); });
 
@@ -1582,7 +1582,7 @@
     try {
       const out = await api({ api: 'chat', model: $('#chatModel').value, konteks: konteksChat(), messages: st.chat.slice(-16).map(m => ({ role: m.role, content: m.content })) }, 4); // tanpa coba-ulang: jangan tertagih dua kali
       const u = out.usage || {}, h = HARGA[out.model] || [1, 5];
-      const usd = ((u.input_tokens || 0) * h[0] + (u.cache_creation_input_tokens || 0) * h[0] * 1.25 + (u.cache_read_input_tokens || 0) * h[0] * 0.1 + (u.output_tokens || 0) * h[1]) / 1e6;
+      const usd = ((u.input_tokens || 0) * h[0] + (u.cache_creation_input_tokens || 0) * h[0] * 1.25 + (u.cache_read_input_tokens || 0) * h[0] * (h[2] || 0.1) + (u.output_tokens || 0) * h[1]) / 1e6;
       st.chat.push({ role: 'assistant', content: out.teks || '(jawaban kosong)',
         meta: (NAMA_MODEL[out.model] || out.model) + ' · ±$' + usd.toFixed(3) + (u.cache_read_input_tokens ? ' · data dari cache' : '') + (out.sisaHariIni != null ? ' · sisa ' + out.sisaHariIni + ' pertanyaan hari ini' : '') });
     } catch (e) { st.chatErr = e.message; }
@@ -1640,7 +1640,7 @@
   };
   const NADA = ['positif', 'netral', 'waspada', 'kritis'];
   st.kom = { set: Object.assign({ model: 'claude-haiku-4-5-20251001', auto: true }, load(K_KOM_SET, {})), sibuk: false, err: null, gagal: {}, t: null };
-  if (!NAMA_MODEL[st.kom.set.model] || st.kom.set.model === 'claude-opus-5-5') st.kom.set.model = 'claude-haiku-4-5-20251001';
+  if (!NAMA_MODEL[st.kom.set.model]) st.kom.set.model = 'claude-haiku-4-5-20251001';
   $('#komModel').value = st.kom.set.model; $('#komAuto').checked = !!st.kom.set.auto;
   $('#komModel').addEventListener('change', () => { st.kom.set.model = $('#komModel').value; save(K_KOM_SET, st.kom.set); });
   $('#komAuto').addEventListener('change', () => { st.kom.set.auto = $('#komAuto').checked; save(K_KOM_SET, st.kom.set); pasangKomentar(); });
@@ -1741,7 +1741,7 @@
       const r = await api({ api: 'komentar', model, konteks, slot: slotKomentar() }, 4); // tanpa coba-ulang: jangan tertagih dua kali
       const isi = parseKomentar(r.teks);
       const u = r.usage || {}, h = HARGA[r.model] || [1, 5];
-      const usd = ((u.input_tokens || 0) * h[0] + (u.cache_creation_input_tokens || 0) * h[0] * 1.25 + (u.cache_read_input_tokens || 0) * h[0] * 0.1 + (u.output_tokens || 0) * h[1]) / 1e6;
+      const usd = ((u.input_tokens || 0) * h[0] + (u.cache_creation_input_tokens || 0) * h[0] * 1.25 + (u.cache_read_input_tokens || 0) * h[0] * (h[2] || 0.1) + (u.output_tokens || 0) * h[1]) / 1e6;
       const list = load(K_KOM, []).filter(x => x.dh !== dh);
       list.push({ dh, sk, waktu: Date.now(), model: r.model, usd, sisa: r.sisaHariIni, isi });
       save(K_KOM, list.slice(-12));

@@ -141,7 +141,20 @@ function doGet() {
  *  Body (text/plain JSON): { api: 'ping' | 'data' | 'ai', key: '<kunci dashboard>', ... }
  * ============================================================ */
 
-const AI_MODEL_DIIZINKAN = ['claude-haiku-4-5-20251001', 'claude-sonnet-5', 'claude-opus-5-5'];
+const AI_MODEL_DIIZINKAN = ['claude-haiku-4-5-20251001', 'claude-sonnet-5', 'claude-sonnet-5-5', 'claude-opus-5-5'];
+// Model yang "berpikir" dulu sebelum menjawab: token berpikir ikut dihitung di max_tokens,
+// jadi batasnya ditambah ruang berpikir, dan effort diatur supaya tetap cepat untuk dashboard.
+const AI_MODEL_BERPIKIR = ['claude-sonnet-5-5', 'claude-opus-5-5'];
+function payloadClaude_(p, maksTeks, effort) {
+  if (AI_MODEL_BERPIKIR.indexOf(p.model) > -1) { p.max_tokens = maksTeks + 16000; p.output_config = { effort: effort }; }
+  else p.max_tokens = maksTeks;
+  return JSON.stringify(p);
+}
+function teksJawaban_(out) {
+  const teks = (out.content || []).filter(c => c.type === 'text').map(c => c.text).join('\n');
+  if (!teks.trim() && out.stop_reason === 'max_tokens') throw new Error('AI kehabisan jatah token sebelum sempat menjawab. Coba lagi atau pakai model lain.');
+  return teks;
+}
 const AI_MAKS_PER_HARI = 30;        // pengaman biaya: maks panggilan Analisis AI per hari
 const AI_MAKS_KARAKTER = 16000;     // ringkasan yang dikirim ke Claude dipotong di sini
 
@@ -245,7 +258,7 @@ function analisisAI_(body) {
     method: 'post',
     contentType: 'application/json',
     headers: { 'x-api-key': apiKey, 'anthropic-version': '2023-06-01' },
-    payload: JSON.stringify({ model: model, max_tokens: 1200, system: system, messages: [{ role: 'user', content: ringkasan }] }),
+    payload: payloadClaude_({ model: model, system: system, messages: [{ role: 'user', content: ringkasan }] }, 1200, 'medium'),
     muteHttpExceptions: true
   });
   const out = JSON.parse(res.getContentText() || '{}');
@@ -254,7 +267,7 @@ function analisisAI_(body) {
   }
   props.setProperty('AI_HITUNG', JSON.stringify({ hari: hari, n: n + 1 }));
   return {
-    teks: (out.content || []).filter(c => c.type === 'text').map(c => c.text).join('\n'),
+    teks: teksJawaban_(out),
     model: model,
     usage: out.usage || {},
     sisaHariIni: AI_MAKS_PER_HARI - n - 1
@@ -310,15 +323,14 @@ function chatAI_(body) {
     method: 'post',
     contentType: 'application/json',
     headers: { 'x-api-key': apiKey, 'anthropic-version': '2023-06-01' },
-    payload: JSON.stringify({
+    payload: payloadClaude_({
       model: model,
-      max_tokens: 1200,
       system: [
         { type: 'text', text: aturan },
         { type: 'text', text: 'DATA BISNIS:\n' + konteks, cache_control: { type: 'ephemeral' } }
       ],
       messages: pesan
-    }),
+    }, 1200, 'low'),
     muteHttpExceptions: true
   });
   const out = JSON.parse(res.getContentText() || '{}');
@@ -327,7 +339,7 @@ function chatAI_(body) {
   }
   props.setProperty('CHAT_HITUNG', JSON.stringify({ hari: hari, n: n + 1 }));
   return {
-    teks: (out.content || []).filter(c => c.type === 'text').map(c => c.text).join('\n'),
+    teks: teksJawaban_(out),
     model: model,
     usage: out.usage || {},
     sisaHariIni: CHAT_MAKS_PER_HARI - n - 1
@@ -369,15 +381,14 @@ function komentarAI_(body) {
     method: 'post',
     contentType: 'application/json',
     headers: { 'x-api-key': apiKey, 'anthropic-version': '2023-06-01' },
-    payload: JSON.stringify({
+    payload: payloadClaude_({
       model: model,
-      max_tokens: 5000,
       system: [
         { type: 'text', text: aturan },
         { type: 'text', text: 'DATA BISNIS:\n' + konteks, cache_control: { type: 'ephemeral' } }
       ],
       messages: [{ role: 'user', content: slot }]
-    }),
+    }, 5000, 'low'),
     muteHttpExceptions: true
   });
   const out = JSON.parse(res.getContentText() || '{}');
@@ -386,7 +397,7 @@ function komentarAI_(body) {
   }
   props.setProperty('KOMENTAR_HITUNG', JSON.stringify({ hari: hari, n: n + 1 }));
   return {
-    teks: (out.content || []).filter(c => c.type === 'text').map(c => c.text).join('\n'),
+    teks: teksJawaban_(out),
     model: model,
     usage: out.usage || {},
     stop: out.stop_reason || '',

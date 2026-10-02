@@ -59,7 +59,7 @@
   <section class="scope"><div class="scope-txt" aria-live="polite"><h2 id="scopeTitle">Memuat…</h2><p class="hint" id="scopeSub"></p></div>
     <div class="kom-ctl" id="komCtl">
       <button type="button" class="btn ai-btn" id="btnKomentar"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z"/></svg><span>Komentar AI</span></button>
-      <select id="komModel" aria-label="Model untuk komentar AI"><option value="claude-haiku-4-5-20251001">Haiku 4.5 · hemat</option><option value="claude-sonnet-5">Sonnet 5 · lebih tajam</option></select>
+      <select id="komModel" aria-label="Model untuk komentar AI"><option value="claude-haiku-4-5-20251001">Haiku 4.5 · hemat</option><option value="claude-sonnet-5">Sonnet 5</option><option value="claude-sonnet-5-5">Sonnet 5.5 · lebih tajam</option><option value="claude-opus-5-5">Opus 5.5 · paling dalam, lambat</option></select>
       <label class="kom-auto" title="Buat komentar otomatis saat filter/periode berubah atau data baru masuk"><input type="checkbox" id="komAuto"> otomatis</label>
     </div>
   </section>
@@ -120,6 +120,7 @@
             <select id="aiModel" aria-label="Model AI">
               <option value="claude-haiku-4-5-20251001">Hemat · Haiku 4.5</option>
               <option value="claude-sonnet-5">Lebih tajam · Sonnet 5</option>
+              <option value="claude-sonnet-5-5">Lebih tajam · Sonnet 5.5</option>
               <option value="claude-opus-5-5">Paling dalam · Opus 5.5</option>
             </select>
             <button class="btn primary" id="btnAI">Analisis sekarang</button>
@@ -335,6 +336,7 @@
       <select id="chatModel" aria-label="Model AI">
         <option value="claude-haiku-4-5-20251001">Hemat · Haiku 4.5</option>
         <option value="claude-sonnet-5">Lebih tajam · Sonnet 5</option>
+        <option value="claude-sonnet-5-5">Lebih tajam · Sonnet 5.5</option>
         <option value="claude-opus-5-5">Paling dalam · Opus 5.5</option>
       </select>
       <span class="hint" id="chatInfo"></span>

@@ -82,7 +82,7 @@ Tombol **✨ Komentar AI** (di bawah judul periode) meminta Claude menilai angka
 ringkasan di atas semua tab, satu baris di tiap KPI, **label + komentar di tiap kartu outlet** (di samping label Sehat/Perlu perhatian —
 label AI berdasarkan penilaian, bukan aturan "kalau di bawah X%"), dan catatan di atas tiap grafik/tabel.
 
-- Satu panggilan untuk semua komentar (±25 rb token masuk, ±2 rb keluar → Haiku ±$0,03, Sonnet ±$0,08).
+- Satu panggilan untuk semua komentar (±25 rb token masuk, ±2 rb keluar → Haiku ±$0,03, Sonnet ±$0,08, Opus lebih mahal & lebih lambat).
 - Hasil disimpan per filter + data. Selama tidak berubah, tidak memanggil lagi. Kalau data baru masuk, komentar lama tetap tampil redup sampai diperbarui.
 - **otomatis** (default nyala): komentar dibuat sendiri saat filter berganti/belum ada komentar; komentar basi diperbarui kalau sudah > 3 jam. Matikan kalau mau hemat.
 - Batas 60 panggilan per hari (Script Properties `KOMENTAR_HITUNG`).
