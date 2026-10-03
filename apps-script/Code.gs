@@ -648,6 +648,7 @@ function onOpen() {
     .addSeparator()
     .addSubMenu(ui.createMenu('🧪 Data dummy (uji coba)')
       .addItem('Isi data dummy 6 bulan', 'isiDataDummy')
+      .addItem('Lanjutkan data dummy sampai kemarin', 'lanjutkanDataDummy')
       .addItem('Hapus semua data dummy', 'hapusDataDummy'))
     .addToUi();
 }
@@ -706,6 +707,66 @@ function isiDataDummy() {
     (lama.total ? ' (menggantikan ' + lama.total + ' baris dummy lama)' : '') + '.';
   Logger.log(pesan);
   if (ui) ui.alert(pesan); else { try { ss.toast(pesan, 'HPP', 8); } catch (e) {} }
+}
+
+/**
+ * Menyambung data dummy yang sudah ada sampai KEMARIN (tanpa mengubah data lama):
+ * omzet, belanja bahan, pembelian non-bahan harian + tagihan bulanan untuk bulan baru.
+ * Harga bahan disambung dari harga terakhir per outlet supaya tidak muncul lonjakan palsu.
+ */
+function lanjutkanDataDummy() {
+  const ss = ss_();
+  const tz = CFG.TZ, hariIni = fmt_(new Date(), 'yyyy-MM-dd');
+  const isoTgl = v => (v instanceof Date) ? fmt_(v, 'yyyy-MM-dd') : String(v || '').slice(0, 10);
+  const isoBln = v => (v instanceof Date) ? fmt_(v, 'yyyy-MM') : String(v || '').slice(0, 7);
+  const dummy = v => String(v).indexOf('DUMMY-') === 0;
+  const isi = sh => { const n = sh.getLastRow(); return n > 1 ? sh.getRange(2, 1, n - 1, sh.getLastColumn()).getValues() : []; };
+
+  const shB = ss.getSheetByName(CFG.SH_BELANJA), shO = ss.getSheetByName(CFG.SH_OMZET), shP = ss.getSheetByName(CFG.SH_PEMBELIAN), shT = ss.getSheetByName(CFG.SH_BULANAN);
+  const vO = isi(shO).filter(r => dummy(r[0])), vB = isi(shB).filter(r => dummy(r[0]));
+  if (!vO.length) throw new Error('Belum ada data dummy. Pakai menu "Isi data dummy 6 bulan" dulu.');
+  const terakhir = vO.reduce((m, r) => { const t = isoTgl(r[2]); return t > m ? t : m; }, '');
+  const d = buatDemo(hariIni); // menghasilkan data s/d kemarin
+  const baru = r => r.tgl > terakhir;
+  if (!d.omzet.some(baru)) { Logger.log('Data dummy sudah sampai ' + terakhir + ', tidak ada yang ditambah.'); return; }
+
+  // harga terakhir per outlet|bahan dari sheet → sambungkan harga baru ke situ
+  const hargaAkhir = {};
+  vB.forEach(r => { const k = r[5] + '|' + r[9], t = isoTgl(r[2]); if (!hargaAkhir[k] || t >= hargaAkhir[k].t) hargaAkhir[k] = { t: t, h: Number(r[12]) || 0 }; });
+  const bBaru = d.belanja.filter(baru), rata = {};
+  bBaru.forEach(r => { const k = r.store + '|' + r.bahan; (rata[k] = rata[k] || []).push(r.harga); });
+  Object.keys(rata).forEach(k => { const a = rata[k]; rata[k] = a.reduce((x, y) => x + y, 0) / a.length; });
+
+  const namaStore = {};
+  bacaStore_(ss).forEach(s => { namaStore[s.kode] = s.nama; });
+  const tgl = x => Utilities.parseDate(x, tz, 'yyyy-MM-dd');
+  const waktu = x => Utilities.parseDate(x + ' 21:00', tz, 'yyyy-MM-dd HH:mm');
+  const cap = 'DUMMY-' + hariIni.replace(/-/g, '') + '-';
+
+  const belanja = bBaru.map(r => {
+    const k = r.store + '|' + r.bahan, a = hargaAkhir[k];
+    let harga = r.harga;
+    if (a && a.h && rata[k]) harga = r.satuan === 'pcs' ? Math.round(a.h * r.harga / rata[k] / 50) * 50 : Math.round(a.h * r.harga / rata[k] / 500) * 500;
+    return [cap + r.id, waktu(r.tgl), tgl(r.tgl), r.bulan, r.brand, r.store, namaStore[r.store] || r.store, 'Dummy', r.kategori, r.bahan, r.qty, r.satuan,
+      harga, Math.round(r.qty * harga), 'Supplier dummy', PENANDA_DUMMY, '', '', cap + r.id.replace(/-\d+$/, '')];
+  });
+  const omzet = d.omzet.filter(baru).map((r, i) => [cap + 'O' + (i + 1) + '-1', waktu(r.tgl), tgl(r.tgl), r.bulan, r.brand, r.store, namaStore[r.store] || r.store,
+    'Dummy', r.omzet, r.struk, PENANDA_DUMMY, cap + 'O' + (i + 1)]);
+  const pembelian = (d.pembelian || []).filter(baru).map(r => [cap + r.id, waktu(r.tgl), tgl(r.tgl), r.bulan, r.brand, r.store, namaStore[r.store] || r.store,
+    'Dummy', r.kategori, r.barang, r.qty, r.satuan, r.harga, r.total, r.dibayarDari, 'Toko dummy', PENANDA_DUMMY, '', cap + r.id.replace(/-\d+$/, '')]);
+  // tagihan bulanan (listrik, air, dll) untuk bulan yang belum punya baris dummy
+  const sudah = {};
+  isi(shT).filter(r => String(r[3]) === PENANDA_DUMMY).forEach(r => { sudah[isoBln(r[0]) + '|' + r[1]] = true; });
+  const tagihan = d.biaya.filter(x => x.kelompok === 'Operasional' && !sudah[x.bulan + '|' + x.store]).map(x => [x.bulan, x.store, x.kategori, PENANDA_DUMMY, x.jumlah]);
+
+  tulisDiBawah_(shB, belanja);
+  tulisDiBawah_(shO, omzet);
+  tulisDiBawah_(shP, pembelian);
+  tulisDiBawah_(shT, tagihan);
+  const pesan = 'Data dummy disambung dari ' + terakhir + ' s/d ' + omzet.reduce((m, r) => { const t = isoTgl(r[2]); return t > m ? t : m; }, '') + ': ' +
+    omzet.length + ' omzet, ' + belanja.length + ' belanja, ' + pembelian.length + ' pembelian, ' + tagihan.length + ' tagihan bulanan.';
+  Logger.log(pesan);
+  try { ss.toast(pesan, 'HPP', 8); } catch (e) {}
 }
 
 function hapusDataDummy() {

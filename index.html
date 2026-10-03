@@ -69,7 +69,8 @@
 
   <div class="tabs-wrap">
     <nav class="tabs" role="tablist">
-      <button role="tab" data-tab="ringkasan" class="on">Ringkasan</button>
+      <button role="tab" data-tab="monitor" class="on">Monitor <span class="count" id="cntAksi"></span></button>
+      <button role="tab" data-tab="ringkasan">Ringkasan</button>
       <button role="tab" data-tab="outlet">Outlet</button>
       <button role="tab" data-tab="penjualan">Penjualan</button>
       <button role="tab" data-tab="profit">Profit</button>
@@ -80,9 +81,34 @@
   </div>
 
   <main>
+    <!-- ===== MONITOR (selalu relatif ke hari ini) ===== -->
+    <section id="v-monitor" class="view">
+      <div class="mon-head">
+        <div class="mon-clock"><b id="monJam">--:--</b><span id="monTgl"></span></div>
+        <div class="mon-fresh" id="monFresh"></div>
+        <button type="button" class="btn outline small" id="btnTv" title="Tampilan layar penuh untuk TV / monitor di dinding, refresh otomatis tiap 5 menit">
+          <svg class="i" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg><span>Mode layar TV</span>
+        </button>
+      </div>
+      <div class="mon-tiles" id="monTiles"></div>
+      <div data-ai="monitor" class="card mon-board-card">
+        <div class="card-head"><h2>Papan outlet</h2><span class="hint">kemarin · bulan berjalan vs target · food cost 28 hari · margin 30 hari · kas vs gaji &amp; sewa akhir bulan · klik baris untuk detail outlet</span></div>
+        <div class="mon-board" id="monBoard"></div>
+      </div>
+      <div class="mon-grid">
+        <div class="card mon-aksi-card" id="monAksiKartu">
+          <div class="card-head"><h2>Perlu ditindak</h2><span class="hint" id="monAksiSub"></span></div>
+          <div id="monAksi"></div>
+        </div>
+        <div data-ai="monitor30" class="card">
+          <div class="card-head"><h2>Omzet harian 30 hari terakhir</h2><span class="hint">per outlet, ditumpuk · garis = rata-rata 7 hari total</span></div>
+          <div class="chart-box"><canvas id="chMon30" aria-label="Grafik omzet harian 30 hari terakhir per outlet"></canvas></div>
+        </div>
+      </div>
+    </section>
+
     <!-- ===== RINGKASAN ===== -->
-    <section id="v-ringkasan" class="view">
-      <div class="card pulse" id="pulse" data-ai="pulse"></div>
+    <section id="v-ringkasan" class="view hidden">
       <div class="grid2">
         <div data-ai="omzetBulan" class="card">
           <div class="card-head"><h2>Omzet per bulan</h2><span class="hint">per outlet, ditumpuk</span></div>

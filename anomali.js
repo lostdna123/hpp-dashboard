@@ -188,6 +188,7 @@
     fcSB.forEach((fc, k) => {
       const [store, bulan] = k.split('|');
       if (!inScopeBulan(bulan) || !inScopeStore(store)) return;
+      if (bulan === bulanIni && Number(hariIni.slice(8, 10)) - 1 < 7) return; // awal bulan: baru beberapa hari, food cost belum bermakna
       const alasan = []; let skor = 0;
       if (fc > batas) { alasan.push('di atas batas ' + pct(batas)); skor += fc > batas + 0.1 ? 2 : 1; }
       const prev = prevMonths(bulan, 6).filter(b => fcSB.has(store + '|' + b)).map(b => fcSB.get(store + '|' + b));

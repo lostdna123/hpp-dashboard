@@ -76,6 +76,16 @@ Apps Script ke Claude. Ringkasan ditandai *prompt cache*, jadi pertanyaan lanjut
 (±$0,01 pertanyaan pertama dengan Haiku, ±$0,002 lanjutan). Maks. 150 pertanyaan/hari (`CHAT_MAKS_PER_HARI`).
 Nama karyawan & gaji per orang tidak pernah dikirim. Riwayat chat hanya disimpan di browser.
 
+## Monitor (tab pertama)
+
+Satu layar untuk memantau semua outlet **hari ini** (tidak ikut filter periode, ikut filter brand & outlet):
+- 6 angka gabungan: omzet kemarin vs hari yang sama minggu lalu, 7 hari terakhir, bulan berjalan vs jalur target + proyeksi, food cost 28 hari, kas semua cabang vs gaji/sewa/tagihan akhir bulan, jumlah hal yang perlu ditindak.
+- **Papan outlet**: per outlet status, omzet kemarin, tren 14 hari, bulan ini vs target, food cost 28 hari, margin 30 hari, kas, status input. Klik baris → detail outlet.
+- **Perlu ditindak**: daftar otomatis (belum input, food cost di atas batas, margin di bawah target, kas tidak cukup untuk gaji & sewa, omzet turun, anomali tinggi), urut dari dampak terbesar. Aturan yang kena di banyak outlet digabung jadi satu baris.
+- **Mode layar TV**: layar penuh untuk monitor di dinding, refresh data otomatis tiap 5 menit. Bisa dibuka langsung dengan menambahkan `&tv=1` di alamat.
+
+Data dummy bisa disambung sampai kemarin lewat menu 🍜 HPP > Data dummy > **Lanjutkan data dummy sampai kemarin** (data lama tidak diubah, harga bahan disambung dari harga terakhir).
+
 ## Komentar AI di seluruh dashboard
 
 Tombol **✨ Komentar AI** (di bawah judul periode) meminta Claude menilai angka yang sedang tampil dan menulis:
